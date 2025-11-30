@@ -46,7 +46,7 @@ class mainApp(AppUI):
         self.df_weight_by_height_2_5 = load_cn_cc('CN_CC_2-5_tuoi.xlsx') 
 
     def load_target_file(self):
-        self.df_children = load_danh_sach_can_do()
+        self.df_children = load_danh_sach_can_do(self.file_path)
 
     def execute_month_age(self):
         self.df_children = apply_month_age(self.df_children, birth_col='ngay_sinh', target_date='ngay_do')

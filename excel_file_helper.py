@@ -1,6 +1,7 @@
 import openpyxl
 import pandas as pd
-
+import os
+import shutil
 
 
 
@@ -65,7 +66,7 @@ def load_cn_cc(file_path: str) -> pd.DataFrame:
     return result
 
 
-def load_danh_sach_can_do(file_path: str = 'C HA.xlsx') -> pd.DataFrame:
+def load_danh_sach_can_do(file_path: str) -> pd.DataFrame:
     """Load danh sách cân đo trẻ em"""
     df = pd.read_excel(file_path, skiprows=6, header=None)
     
@@ -113,77 +114,69 @@ def export_to_excel(
     df_result: pd.DataFrame,
     input_file: str = None,
     output_file: str = None,
-    header_rows: int = 5,
-    footer_start_keyword: str = 'Tổng hợp trang'
+    data_start_row: int = 8,
+    sheet_name: str = None
 ) -> None:
     """
-    Ghi kết quả vào file Excel mới dựa trên template file gốc.
-    Thay thế cột A-O (15 cột) bằng 12 cột mới, giữ nguyên cột P trở đi.
+    Copy file Excel gốc và ghi kết quả vào, giữ nguyên định dạng.
     
     Args:
         df_result: DataFrame chứa kết quả cần ghi
         input_file: File Excel gốc làm template
         output_file: File Excel đầu ra (None = ghi đè file gốc)
-        header_rows: Số dòng header title
-        footer_start_keyword: Từ khóa bắt đầu footer
+        data_start_row: Hàng bắt đầu ghi data (mặc định là 8)
+        sheet_name: Tên sheet (None = sheet đầu tiên)
     """
     # Nếu không có output_file, ghi đè file gốc
     if output_file is None:
         output_file = input_file
     
-    # Đọc file gốc
-    df_original = pd.read_excel(input_file, header=None)
+    # Chuẩn hóa đường dẫn
+    input_file = os.path.normpath(input_file)
+    output_file = os.path.normpath(output_file)
     
-    # Tìm dòng bắt đầu footer
-    footer_mask = df_original.iloc[:, 0].astype(str).str.contains(footer_start_keyword, na=False)
-    footer_start = footer_mask.idxmax() if footer_mask.any() else len(df_original)
+    # Copy file gốc sang file mới (giữ nguyên định dạng)
+    if input_file != output_file:
+        shutil.copy2(input_file, output_file)
     
-    # Data bắt đầu từ dòng 7 (5 title + 2 header cột)
-    data_start = header_rows + 2
+    # Mở file bằng openpyxl
+    wb = openpyxl.load_workbook(output_file)
+    ws = wb.active if sheet_name is None else wb[sheet_name]
     
-    # Lấy các cột từ P trở đi (index 15+) của phần data
-    df_extra_cols = df_original.iloc[data_start:footer_start, 15:].copy().reset_index(drop=True)
+    # Mapping cột DataFrame -> cột Excel
+    column_mapping = {
+        'stt': 'A',
+        'ho_ten': 'B',
+        'nam': 'C',
+        'nu': 'D',
+        'ngay_sinh': 'E',
+        'thang_tuoi': 'F',
+        'can_nang': 'H',
+        'execute_cn_tuoi': 'I',
+        'chieu_cao': 'K',
+        'execute_cc_tuoi': 'L',
+        'execute_cn_cc': 'M',
+        'note': 'N',
+    }
     
-    # Chuẩn bị data mới (12 cột - thêm cột Note)
-    data_rows = []
-    for _, row in df_result.iterrows():
-        data_row = [
-            int(row['stt']) if pd.notna(row['stt']) else '',
-            row['ho_ten'] if pd.notna(row.get('ho_ten')) else '',
-            row['nam'] if pd.notna(row.get('nam')) else '',
-            row['nu'] if pd.notna(row.get('nu')) else '',
-            row['ngay_sinh'] if pd.notna(row.get('ngay_sinh')) else '',
-            int(row['thang_tuoi']) if pd.notna(row.get('thang_tuoi')) else '',
-            row['can_nang'] if pd.notna(row.get('can_nang')) else '',
-            row.get('execute_cn_tuoi', '') if pd.notna(row.get('execute_cn_tuoi')) else '',
-            row['chieu_cao'] if pd.notna(row.get('chieu_cao')) else '',
-            row.get('execute_cc_tuoi', '') if pd.notna(row.get('execute_cc_tuoi')) else '',
-            row.get('execute_cn_cc', '') if pd.notna(row.get('execute_cn_cc')) else '',
-            row.get('note', '') if pd.notna(row.get('note')) else '',  # Cột Note
-        ]
-        data_rows.append(data_row)
+    # Ghi từng dòng data
+    for idx, row in df_result.iterrows():
+        excel_row = data_start_row + idx
+        
+        for col_name, excel_col in column_mapping.items():
+            if col_name in row.index:
+                value = row[col_name]
+                # Xử lý giá trị NaN
+                if pd.isna(value):
+                    cell_value = None
+                elif col_name in ['stt', 'thang_tuoi'] and pd.notna(value):
+                    cell_value = int(value)
+                else:
+                    cell_value = value
+                
+                ws[f"{excel_col}{excel_row}"] = cell_value
     
-    df_data = pd.DataFrame(data_rows)
-    
-    # Ghép data với các cột extra (P trở đi)
-    df_data_full = pd.concat([df_data, df_extra_cols], axis=1, ignore_index=True)
-    
-    # Header cột mới (12 cột - thêm Note)
-    new_header = ['Stt', 'Họ tên trẻ', 'Nam', 'Nữ', 'Ngày sinh', 'Tháng tuổi', 'Cân nặng', 'CN/Tuổi', 'Chiều cao', 'CC/Tuổi', 'CN/CC', 'Ghi chú']
-    extra_header = df_original.iloc[5, 15:].tolist()  # Lấy header của cột P trở đi
-    full_header = new_header + extra_header
-    df_new_header = pd.DataFrame([full_header])
-    
-    # Header title (5 dòng đầu)
-    df_header_title = df_original.iloc[:header_rows].copy()
-    
-    # Footer
-    df_footer = df_original.iloc[footer_start:].copy()
-    
-    # Ghép tất cả
-    df_output = pd.concat([df_header_title, df_new_header, df_data_full, df_footer], ignore_index=True)
-    
-    # Ghi file
-    df_output.to_excel(output_file, index=False, header=False)
-    print(f"Đã xuất kết quả ra file: {output_file}")
+    # Lưu file
+    wb.save(output_file)
+    wb.close()
         
