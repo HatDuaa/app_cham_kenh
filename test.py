@@ -4,31 +4,6 @@ from ui_helper import *
 import numpy as np
 
 
-
-# # Load all data
-# df_weight_by_age = load_cn_per_old()                        # Cân nặng theo tuổi
-# df_height_by_age = load_cc_per_old()                        # Chiều cao theo tuổi
-# df_weight_by_height_0_2 = load_cn_cc('CN_CC_0-2_tuoi.xlsx') # Cân nặng theo chiều cao (0-24 tháng)
-# df_weight_by_height_2_5 = load_cn_cc('CN_CC_2-5_tuoi.xlsx') # Cân nặng theo chiều cao (24-60 tháng)
-# df_children_records = load_danh_sach_can_do()               # Danh sách cân đo trẻ em
-
-
-
-# df_children_records = execute_weight_by_age(df_children_records, df_weight_by_age)
-# df_children_records = execute_height_by_age(df_children_records, df_height_by_age)
-# df_children_records = execute_weight_by_height(df_children_records, df_weight_by_height_0_2, df_weight_by_height_2_5)
-
-# # Tổng kết trẻ dưới 2 tuổi (≤24 tháng)
-# summary_under_2 = summary_statistics(df_children_records, max_months=24)
-# print_summary(summary_under_2, "TRẺ DƯỚI 2 TUỔI (≤24 tháng)")
-
-# # Tổng kết trẻ dưới 5 tuổi (≤60 tháng) - tất cả
-# summary_under_5 = summary_statistics(df_children_records, max_months=60)
-# print_summary(summary_under_5, "TRẺ DƯỚI 5 TUỔI (≤60 tháng)")
-
-# # Ghi đè kết quả vào file Excel
-# export_to_excel(df_children_records, file_path='C HA.xlsx')
-
 class mainApp(AppUI):
     def __init__(self):
         self.df_children = pd.DataFrame()
@@ -54,20 +29,35 @@ class mainApp(AppUI):
     def execute_weight_by_age(self):
         self.df_children = execute_weight_by_age(self.df_children, self.df_weight_by_age)
         if self.var_overwrite.get():
-            write_column_to_excel(self.df_children, 'execute_cn_tuoi', self.file_path, 'I')
+            write_column_to_excel(self.df_children, 'execute_cn_tuoi', self.file_path, 'I', start_row=7)
     
     def execute_height_by_age(self):
         self.df_children = execute_height_by_age(self.df_children, self.df_height_by_age)
         if self.var_overwrite.get():
-            write_column_to_excel(self.df_children, 'execute_cc_tuoi', self.file_path, 'K')
+            write_column_to_excel(self.df_children, 'execute_cc_tuoi', self.file_path, 'K', start_row=7)
     
     def execute_weight_by_height(self):
         self.df_children = execute_weight_by_height(self.df_children, self.df_weight_by_height_0_2, self.df_weight_by_height_2_5)
         if self.var_overwrite.get():
-            write_column_to_excel(self.df_children, 'execute_cn_cc', self.file_path, 'L')
+            write_column_to_excel(self.df_children, 'execute_cn_cc', self.file_path, 'L', start_row=7)
     
-    def summary_statistics(self, df, max_months):
-        return summary_statistics(df, max_months=max_months)
+    def adjust_height(self):
+        self.df_children = adjust_height_by_age(self.df_children, self.df_height_by_age)
+        if self.var_overwrite.get():
+            write_column_to_excel(self.df_children, 'chieu_cao', self.file_path, 'J', start_row=7)
+    
+    def adjust_weight(self):
+        self.df_children = adjust_weight_by_height_and_age(
+            self.df_children, 
+            self.df_weight_by_height_0_2, 
+            self.df_weight_by_height_2_5,
+            self.df_weight_by_age
+        )
+        if self.var_overwrite.get():
+            write_column_to_excel(self.df_children, 'can_nang', self.file_path, 'H', start_row=7)
+    
+    def summary_statistics(self, max_months: Optional[int] = None):
+        return summary_statistics(self.df_children, max_months=max_months)
     
     def format_summary(self, summary: dict, title: str = "TRẺ DƯỚI 2 TUỔI") -> str:
         """Chuyển dict thống kê thành text"""

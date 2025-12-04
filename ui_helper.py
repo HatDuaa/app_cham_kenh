@@ -7,7 +7,7 @@ class AppUI:
     def __init__(self):
         self.window = tk.Tk()
         self.window.title('App Chấm Kênh - New Version')
-        self.window.geometry("750x550")
+        self.window.geometry("1000x750")
         
         self.file_path = ''
         self.target_date = ''
@@ -61,10 +61,12 @@ class AppUI:
         
         # Checkbox variables
         self.var_calc_month = tk.BooleanVar()
-        self.var_sdd = tk.BooleanVar()
-        self.var_cncc = tk.BooleanVar()
-        self.var_export = tk.BooleanVar(value=True)
-        self.var_overwrite = tk.BooleanVar(value=False)  # Ghi đè vào file gốc
+        self.var_sdd = tk.BooleanVar(value=True)
+        self.var_cncc = tk.BooleanVar(value=True)
+        self.var_adj_height = tk.BooleanVar()
+        self.var_adj_weight = tk.BooleanVar()
+        self.var_export = tk.BooleanVar()
+        self.var_overwrite = tk.BooleanVar(value=True)
         self.var_summary_2 = tk.BooleanVar()
         self.var_summary_5 = tk.BooleanVar()
         
@@ -75,17 +77,23 @@ class AppUI:
         ttk.Checkbutton(row1, text="Chấm SDD (CN/tuổi, CC/tuổi)", variable=self.var_sdd).pack(side="left", padx=20)
         ttk.Checkbutton(row1, text="Chấm CN/CC", variable=self.var_cncc).pack(side="left", padx=20)
         
-        # Row 2
+        # Row 2 - Adj
         row2 = ttk.Frame(frame_functions)
         row2.pack(fill="x", pady=5)
-        ttk.Checkbutton(row2, text="Ghi đè vào file gốc", variable=self.var_overwrite).pack(side="left", padx=20)
-        ttk.Checkbutton(row2, text="Xuất ra file mới", variable=self.var_export).pack(side="left", padx=20)
+        ttk.Checkbutton(row2, text="Adj chiều cao", variable=self.var_adj_height).pack(side="left", padx=20)
+        ttk.Checkbutton(row2, text="Adj cân nặng", variable=self.var_adj_weight).pack(side="left", padx=20)
         
-        # Row 3
+        # Row 3 - Export
         row3 = ttk.Frame(frame_functions)
         row3.pack(fill="x", pady=5)
-        ttk.Checkbutton(row3, text="Thống kê trẻ dưới 2 tuổi", variable=self.var_summary_2).pack(side="left", padx=20)
-        ttk.Checkbutton(row3, text="Thống kê trẻ dưới 5 tuổi", variable=self.var_summary_5).pack(side="left", padx=20)
+        ttk.Checkbutton(row3, text="Ghi đè vào file gốc", variable=self.var_overwrite).pack(side="left", padx=20)
+        ttk.Checkbutton(row3, text="Xuất ra file mới", variable=self.var_export).pack(side="left", padx=20)
+        
+        # Row 4 - Thống kê
+        row4 = ttk.Frame(frame_functions)
+        row4.pack(fill="x", pady=5)
+        ttk.Checkbutton(row4, text="Thống kê trẻ dưới 2 tuổi", variable=self.var_summary_2).pack(side="left", padx=20)
+        ttk.Checkbutton(row4, text="Thống kê trẻ dưới 5 tuổi", variable=self.var_summary_5).pack(side="left", padx=20)
         
         # === BUTTON THỰC HIỆN ===
         btn_execute = ttk.Button(
@@ -198,21 +206,31 @@ class AppUI:
                 self.execute_weight_by_height()
                 self._log("    ✓ Hoàn thành chấm CN/CC")
             
+            if self.var_adj_height.get():
+                self._log("\n[4] Đang adj chiều cao...")
+                self.adjust_height()
+                self._log("    ✓ Hoàn thành adj chiều cao")
+            
+            if self.var_adj_weight.get():
+                self._log("\n[5] Đang adj cân nặng...")
+                self.adjust_weight()
+                self._log("    ✓ Hoàn thành adj cân nặng")
+            
             if self.var_export.get():
-                self._log("\n[4] Đang xuất ra file mới...")
+                self._log("\n[6] Đang xuất ra file mới...")
                 self.export_to_excel()
                 self._log("    ✓ Hoàn thành xuất file")
             
             if self.var_summary_2.get():
-                self._log("\n[5] Thống kê trẻ dưới 2 tuổi:")
-                summary = self.summary_statistics(self.df_children, max_months=24)
+                self._log("\n[7] Thống kê trẻ dưới 2 tuổi:")
+                summary = self.summary_statistics(max_months=24)
                 text = self.format_summary(summary, "TRẺ DƯỚI 2 TUỔI (≤24 tháng)")
                 self._print_summary(text)
                 self._log("    ✓ Đã hiển thị thống kê")
             
             if self.var_summary_5.get():
-                self._log("\n[6] Thống kê trẻ dưới 5 tuổi:")
-                summary = self.summary_statistics(self.df_children, max_months=60)
+                self._log("\n[8] Thống kê trẻ dưới 5 tuổi:")
+                summary = self.summary_statistics(max_months=60)
                 text = self.format_summary(summary, "TRẺ DƯỚI 5 TUỔI (≤60 tháng)")
                 self._print_summary(text)
                 self._log("    ✓ Đã hiển thị thống kê")
@@ -244,10 +262,16 @@ class AppUI:
     def execute_weight_by_height(self):
         raise NotImplementedError("Not implemented yet")
     
+    def adjust_height(self):
+        raise NotImplementedError("Not implemented yet")
+    
+    def adjust_weight(self):
+        raise NotImplementedError("Not implemented yet")
+    
     def export_to_excel(self):
         raise NotImplementedError("Not implemented yet")
     
-    def summary_statistics(self, df, max_months):
+    def summary_statistics(self, max_months):
         raise NotImplementedError("Not implemented yet")
     
     def format_summary(self, summary: dict, title: str) -> str:

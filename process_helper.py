@@ -1,10 +1,11 @@
+from typing import Optional
 import pandas as pd
 import numpy as np
 from datetime import datetime
 from openpyxl import load_workbook
 
 
-def calculate_month_age(birth_date, target_date) -> int:
+def calculate_month_age(birth_date, target_date) -> Optional[int]:
     if pd.isna(birth_date):
         return None
     
@@ -35,7 +36,7 @@ def execute_weight_by_age(df_children: pd.DataFrame, df_weight_by_age: pd.DataFr
     ]
     choices = ['-3 SD', '-2 SD', 'BT', '+2 SD', '+3 SD']
     
-    df['execute_cn_tuoi'] = np.select(conditions, choices, default=None)
+    df['execute_cn_tuoi'] = np.select(conditions, choices, default='')
     
     df = df.drop(columns=df_weight_by_age.columns.difference(['thang_tuoi', 'gioi_tinh']))
     
@@ -54,7 +55,7 @@ def execute_height_by_age(df_children: pd.DataFrame, df_height_by_age: pd.DataFr
     ]
     choices = ['-3 SD', '-2 SD', 'BT', '+2 SD', '+3 SD']
     
-    df['execute_cc_tuoi'] = np.select(conditions, choices, default=None)
+    df['execute_cc_tuoi'] = np.select(conditions, choices, default='')
     
     # Bỏ các cột tham chiếu
     df = df.drop(columns=df_height_by_age.columns.difference(['thang_tuoi', 'gioi_tinh']))
@@ -107,7 +108,7 @@ def execute_weight_by_height(df_children: pd.DataFrame, df_weight_by_height_0_2:
     ]
     choices = ['-3 SD', '-2 SD', 'BT', '+2 SD', '+3 SD']
     
-    df['execute_cn_cc'] = np.select(conditions, choices, default=None)
+    df['execute_cn_cc'] = np.select(conditions, choices, default='')
     
     # Bỏ các cột tham chiếu
     df = df.drop(columns=df_weight_by_height_0_2.columns.difference(['chieu_cao', 'gioi_tinh']))
@@ -118,7 +119,213 @@ def execute_weight_by_height(df_children: pd.DataFrame, df_weight_by_height_0_2:
     return df
 
 
-def summary_statistics(df: pd.DataFrame, max_months: int = None) -> dict:
+def adjust_height_by_age(
+    df_children: pd.DataFrame, 
+    df_height_by_age: pd.DataFrame,
+    increase_range: tuple = (0.5, 2.0)
+) -> pd.DataFrame:
+    """
+    Điều chỉnh chiều cao: tăng random một khoảng nhưng không vượt ngưỡng SD (giữ nguyên trạng thái).
+    
+    Args:
+        df_children: DataFrame trẻ em (cần có cột thang_tuoi, gioi_tinh, execute_cc_tuoi, chieu_cao)
+        df_height_by_age: DataFrame chuẩn chiều cao/tuổi
+        increase_range: Tuple (min, max) khoảng tăng thêm (cm), mặc định (0.5, 2.0)
+    
+    Returns:
+        DataFrame với cột 'chieu_cao_adj' đã được điều chỉnh
+    """
+    df = df_children.copy()
+    
+    # Merge với bảng chuẩn
+    df = pd.merge(df, df_height_by_age, how='left', on=['thang_tuoi', 'gioi_tinh'], suffixes=('', '_ref'))
+    
+    # Tạo random increase cho mỗi hàng
+    n = len(df)
+    random_increases = np.random.uniform(increase_range[0], increase_range[1], n)
+    
+    def calc_height_adj(row, increase):
+        """Tăng chiều cao, không vượt qua ngưỡng trên của trạng thái hiện tại"""
+        status = row['execute_cc_tuoi']
+        current_height = row['chieu_cao']
+        
+        if pd.isna(current_height):
+            return np.nan
+        
+        # Xác định ngưỡng trên dựa vào trạng thái
+        if status == '-3 SD':
+            upper_limit = row['minus_3sd']
+        elif status == '-2 SD':
+            upper_limit = row['minus_2sd']
+        elif status == 'BT':
+            upper_limit = row['plus_2sd']
+        elif status == '+2 SD':
+            upper_limit = row['plus_3sd']
+        elif status == '+3 SD':
+            upper_limit = current_height + 10  # Không giới hạn, cho tăng thoải mái
+        else:
+            return current_height
+        
+        # Tăng lên và lấy min với ngưỡng
+        new_height = current_height + increase
+        return min(new_height, upper_limit)
+    
+    # Ghi đè cột chieu_cao
+    df['chieu_cao_tmp'] = [calc_height_adj(row, random_increases[idx]) for idx, (_, row) in enumerate(df.iterrows())]
+    df['chieu_cao_tmp'] = df['chieu_cao_tmp'].round(1)
+
+    df_children['chieu_cao'] = df['chieu_cao_tmp']
+    
+    return df_children
+
+
+def adjust_weight_by_height_and_age(
+    df_children: pd.DataFrame,
+    df_weight_by_height_0_2: pd.DataFrame,
+    df_weight_by_height_2_5: pd.DataFrame,
+    df_weight_by_age: pd.DataFrame,
+    height_col: str = 'chieu_cao',
+    increase_range: tuple = (0.1, 0.5)
+) -> pd.DataFrame:
+    """
+    Điều chỉnh cân nặng: tăng random một khoảng nhưng không vượt ngưỡng SD (giữ nguyên trạng thái CN/CC và CN/Tuổi).
+    
+    Args:
+        df_children: DataFrame trẻ em
+        df_weight_by_height_0_2: DataFrame chuẩn CN/CC cho trẻ 0-24 tháng
+        df_weight_by_height_2_5: DataFrame chuẩn CN/CC cho trẻ 25-60 tháng
+        df_weight_by_age: DataFrame chuẩn CN/Tuổi
+        height_col: Tên cột chiều cao để dùng (mặc định 'chieu_cao')
+        increase_range: Tuple (min, max) khoảng tăng thêm (kg), mặc định (0.2, 0.8)
+    
+    Returns:
+        DataFrame với cột 'can_nang' đã được điều chỉnh
+    """
+    df = df_children.copy()
+    
+    # Kiểm tra cột chiều cao
+    if height_col not in df.columns:
+        height_col = 'chieu_cao'
+    
+    # Tách những hàng có chiều cao và không có
+    df_with_height = df[df[height_col].notna()].copy()
+    
+    if df_with_height.empty:
+        return df_children
+    
+    # Merge với bảng chuẩn CN/Tuổi để lấy ngưỡng
+    df_weight_by_age_renamed = df_weight_by_age.rename(columns={
+        'minus_3sd': 'minus_3sd_tuoi',
+        'minus_2sd': 'minus_2sd_tuoi',
+        'plus_2sd': 'plus_2sd_tuoi',
+        'plus_3sd': 'plus_3sd_tuoi',
+        'median': 'median_tuoi'
+    })
+    df_with_height = pd.merge(df_with_height, df_weight_by_age_renamed, 
+                               how='left', on=['thang_tuoi', 'gioi_tinh'])
+    
+    # Sắp xếp theo chiều cao để dùng merge_asof
+    df_with_height = df_with_height.sort_values(height_col)
+    
+    # Đổi tên cột tạm thời để merge_asof
+    df_with_height = df_with_height.rename(columns={height_col: 'chieu_cao_temp'})
+    
+    # Tách trẻ 0-24 tháng và trẻ > 24 tháng
+    df_0_24 = df_with_height[df_with_height['thang_tuoi'] <= 24].copy()
+    df_25_60 = df_with_height[df_with_height['thang_tuoi'] > 24].copy()
+    
+    results = []
+    
+    # Merge_asof cho từng giới tính (0-24 tháng)
+    for gioi_tinh in ['trai', 'gai']:
+        df_child = df_0_24[df_0_24['gioi_tinh'] == gioi_tinh].copy()
+        df_ref = df_weight_by_height_0_2[df_weight_by_height_0_2['gioi_tinh'] == gioi_tinh].sort_values('chieu_cao')
+        if not df_child.empty and not df_ref.empty:
+            merged = pd.merge_asof(
+                df_child, df_ref, 
+                left_on='chieu_cao_temp', right_on='chieu_cao',
+                direction='nearest', suffixes=('', '_ref')
+            )
+            results.append(merged)
+    
+    # Merge_asof cho từng giới tính (25-60 tháng)
+    for gioi_tinh in ['trai', 'gai']:
+        df_child = df_25_60[df_25_60['gioi_tinh'] == gioi_tinh].copy()
+        df_ref = df_weight_by_height_2_5[df_weight_by_height_2_5['gioi_tinh'] == gioi_tinh].sort_values('chieu_cao')
+        if not df_child.empty and not df_ref.empty:
+            merged = pd.merge_asof(
+                df_child, df_ref,
+                left_on='chieu_cao_temp', right_on='chieu_cao',
+                direction='nearest', suffixes=('', '_ref')
+            )
+            results.append(merged)
+    
+    if not results:
+        df['can_nang_adj'] = np.nan
+        return df
+    
+    df_merged = pd.concat(results, ignore_index=True)
+    
+    # Tạo random increase cho mỗi hàng
+    n = len(df_merged)
+    random_increases = np.random.uniform(increase_range[0], increase_range[1], n)
+    
+    def calc_weight_adj(row, increase):
+        """Tăng cân nặng, không vượt qua ngưỡng trên của trạng thái hiện tại (cả CN/CC và CN/Tuổi)"""
+        status_cn_cc = row['execute_cn_cc']
+        status_cn_tuoi = row.get('execute_cn_tuoi', '')
+        current_weight = row['can_nang']
+        
+        if pd.isna(current_weight):
+            return np.nan
+        
+        # Xác định ngưỡng trên dựa vào trạng thái CN/CC
+        if status_cn_cc == '-3 SD':
+            upper_limit_cc = row['minus_3sd']
+        elif status_cn_cc == '-2 SD':
+            upper_limit_cc = row['minus_2sd']
+        elif status_cn_cc == 'BT':
+            upper_limit_cc = row['plus_2sd']
+        elif status_cn_cc == '+2 SD':
+            upper_limit_cc = row['plus_3sd']
+        elif status_cn_cc == '+3 SD':
+            upper_limit_cc = current_weight + 5  # Không giới hạn
+        else:
+            upper_limit_cc = current_weight + 5
+        
+        # Xác định ngưỡng trên dựa vào trạng thái CN/Tuổi (nếu có)
+        if status_cn_tuoi == '-3 SD':
+            upper_limit_tuoi = row.get('minus_3sd_tuoi', upper_limit_cc)
+        elif status_cn_tuoi == '-2 SD':
+            upper_limit_tuoi = row.get('minus_2sd_tuoi', upper_limit_cc)
+        elif status_cn_tuoi == 'BT':
+            upper_limit_tuoi = row.get('plus_2sd_tuoi', upper_limit_cc)
+        elif status_cn_tuoi == '+2 SD':
+            upper_limit_tuoi = row.get('plus_3sd_tuoi', upper_limit_cc)
+        elif status_cn_tuoi == '+3 SD':
+            upper_limit_tuoi = current_weight + 5
+        else:
+            upper_limit_tuoi = current_weight + 5
+        
+        # Lấy min của 2 ngưỡng để đảm bảo không vượt cả 2
+        upper_limit = min(upper_limit_cc, upper_limit_tuoi)
+        
+        # Tăng lên và lấy min với ngưỡng
+        new_weight = current_weight + increase
+        return min(new_weight, upper_limit)
+    
+    df_merged['can_nang_tmp'] = [calc_weight_adj(row, random_increases[idx]) for idx, (_, row) in enumerate(df_merged.iterrows())]
+    df_merged['can_nang_tmp'] = df_merged['can_nang_tmp'].round(1)
+    
+    # Tạo mapping stt -> can_nang_tmp
+    adj_map = dict(zip(df_merged['stt'], df_merged['can_nang_tmp']))
+    
+    df_children['can_nang'] = df_children['stt'].map(adj_map).fillna(df_children['can_nang'])
+    
+    return df_children
+
+
+def summary_statistics(df: pd.DataFrame, max_months: Optional[int] = None) -> dict:
     """
     Tổng kết dinh dưỡng
     Args:
@@ -274,7 +481,7 @@ def write_column_to_excel(
     excel_path: str,
     excel_column: str,
     start_row: int = 7,
-    sheet_name: str = None
+    sheet_name: Optional[str] = None
 ) -> None:
     """
     Ghi đè 1 cột từ DataFrame vào 1 cột trong file Excel.
@@ -291,6 +498,10 @@ def write_column_to_excel(
     # Load workbook
     wb = load_workbook(excel_path)
     ws = wb.active if sheet_name is None else wb[sheet_name]
+    
+    if ws is None:
+        wb.close()
+        raise ValueError("Not found sheet in Excel file.")
     
     # Lấy dữ liệu từ DataFrame
     data = df[df_column].tolist()

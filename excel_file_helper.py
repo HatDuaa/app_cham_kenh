@@ -67,14 +67,16 @@ def load_cn_cc(file_path: str) -> pd.DataFrame:
 
 
 def load_danh_sach_can_do(file_path: str) -> pd.DataFrame:
-    """Load danh sách cân đo trẻ em"""
+    """Load danh sách cân đo trẻ em (format mới 2025)"""
     df = pd.read_excel(file_path, skiprows=6, header=None)
     
-    df = df.iloc[:, [0, 1, 2, 3, 4, 5, 7, 10]]
+    # Cột: 0-STT, 1-Họ tên, 2-Nam, 3-Nữ, 4-Ngày sinh, 5-Tháng tuổi, 6-Họ tên mẹ, 
+    #      7-Cân nặng, 8-TT CN/Tuổi, 9-Chiều cao, 10-TT CC/Tuổi, 11-CN/CC
+    df = df.iloc[:, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]]
     
     df.columns = [
         'stt', 'ho_ten', 'nam', 'nu', 'ngay_sinh', 'thang_tuoi',
-        'can_nang', 'chieu_cao'
+        'ho_ten_me', 'can_nang', 'execute_cn_tuoi', 'chieu_cao', 'execute_cc_tuoi', 'execute_cn_cc'
     ]
     
     # Loại bỏ các dòng không phải data (stt không phải số)
@@ -143,7 +145,7 @@ def export_to_excel(
     wb = openpyxl.load_workbook(output_file)
     ws = wb.active if sheet_name is None else wb[sheet_name]
     
-    # Mapping cột DataFrame -> cột Excel
+    # Mapping cột DataFrame -> cột Excel (format mới 2025)
     column_mapping = {
         'stt': 'A',
         'ho_ten': 'B',
@@ -151,12 +153,13 @@ def export_to_excel(
         'nu': 'D',
         'ngay_sinh': 'E',
         'thang_tuoi': 'F',
+        'ho_ten_me': 'G',
         'can_nang': 'H',
         'execute_cn_tuoi': 'I',
-        'chieu_cao': 'K',
-        'execute_cc_tuoi': 'L',
-        'execute_cn_cc': 'M',
-        'note': 'N',
+        'chieu_cao': 'J',
+        'execute_cc_tuoi': 'K',
+        'execute_cn_cc': 'L',
+        'note': 'M',
     }
     
     # Ghi từng dòng data
