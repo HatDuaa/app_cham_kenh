@@ -5,7 +5,7 @@ from datetime import datetime
 from openpyxl import load_workbook
 
 
-def calculate_month_age(birth_date, target_date) -> Optional[int]:
+def calculate_month_age(birth_date: datetime, target_date: datetime) -> Optional[int]:
     if pd.isna(birth_date):
         return None
     
@@ -145,30 +145,37 @@ def adjust_height_by_age(
     random_increases = np.random.uniform(increase_range[0], increase_range[1], n)
     
     def calc_height_adj(row, increase):
-        """Tăng chiều cao, không vượt qua ngưỡng trên của trạng thái hiện tại"""
+        """Tăng chiều cao, giữ trong khoảng (lower, upper) để không thay đổi trạng thái"""
         status = row['execute_cc_tuoi']
         current_height = row['chieu_cao']
         
         if pd.isna(current_height):
             return np.nan
         
-        # Xác định ngưỡng trên dựa vào trạng thái
+        # Xác định ngưỡng dưới và ngưỡng trên dựa vào trạng thái
         if status == '-3 SD':
+            lower_limit = current_height  # Giữ nguyên hoặc tăng
             upper_limit = row['minus_3sd']
         elif status == '-2 SD':
+            lower_limit = row['minus_3sd']
             upper_limit = row['minus_2sd']
         elif status == 'BT':
+            lower_limit = row['minus_2sd']
             upper_limit = row['plus_2sd']
         elif status == '+2 SD':
+            lower_limit = row['plus_2sd']
             upper_limit = row['plus_3sd']
         elif status == '+3 SD':
-            upper_limit = current_height + 10  # Không giới hạn, cho tăng thoải mái
+            lower_limit = row['plus_3sd']
+            upper_limit = current_height + 10  # Không giới hạn trên
         else:
             return current_height
         
-        # Tăng lên và lấy min với ngưỡng
-        new_height = current_height + increase
-        return min(new_height, upper_limit)
+        # Tăng lên và giữ trong khoảng (lower, upper)
+        new_height = max(current_height, lower_limit)  # Không nhỏ hơn lower
+        new_height = new_height + increase
+        new_height = min(new_height, upper_limit)  # Không lớn hơn upper
+        return new_height
     
     # Ghi đè cột chieu_cao
     df['chieu_cao_tmp'] = [calc_height_adj(row, random_increases[idx]) for idx, (_, row) in enumerate(df.iterrows())]
@@ -271,7 +278,7 @@ def adjust_weight_by_height_and_age(
     random_increases = np.random.uniform(increase_range[0], increase_range[1], n)
     
     def calc_weight_adj(row, increase):
-        """Tăng cân nặng, không vượt qua ngưỡng trên của trạng thái hiện tại (cả CN/CC và CN/Tuổi)"""
+        """Tăng cân nặng, giữ trong khoảng (lower, upper) để không thay đổi trạng thái (cả CN/CC và CN/Tuổi)"""
         status_cn_cc = row['execute_cn_cc']
         status_cn_tuoi = row.get('execute_cn_tuoi', '')
         current_weight = row['can_nang']
@@ -279,40 +286,55 @@ def adjust_weight_by_height_and_age(
         if pd.isna(current_weight):
             return np.nan
         
-        # Xác định ngưỡng trên dựa vào trạng thái CN/CC
+        # Xác định ngưỡng dưới và trên dựa vào trạng thái CN/CC
         if status_cn_cc == '-3 SD':
+            lower_limit_cc = current_weight  # Giữ nguyên hoặc tăng
             upper_limit_cc = row['minus_3sd']
         elif status_cn_cc == '-2 SD':
+            lower_limit_cc = row['minus_3sd']
             upper_limit_cc = row['minus_2sd']
         elif status_cn_cc == 'BT':
+            lower_limit_cc = row['minus_2sd']
             upper_limit_cc = row['plus_2sd']
         elif status_cn_cc == '+2 SD':
+            lower_limit_cc = row['plus_2sd']
             upper_limit_cc = row['plus_3sd']
         elif status_cn_cc == '+3 SD':
-            upper_limit_cc = current_weight + 5  # Không giới hạn
+            lower_limit_cc = row['plus_3sd']
+            upper_limit_cc = current_weight + 5  # Không giới hạn trên
         else:
+            lower_limit_cc = current_weight
             upper_limit_cc = current_weight + 5
         
-        # Xác định ngưỡng trên dựa vào trạng thái CN/Tuổi (nếu có)
+        # Xác định ngưỡng dưới và trên dựa vào trạng thái CN/Tuổi (nếu có)
         if status_cn_tuoi == '-3 SD':
+            lower_limit_tuoi = current_weight
             upper_limit_tuoi = row.get('minus_3sd_tuoi', upper_limit_cc)
         elif status_cn_tuoi == '-2 SD':
+            lower_limit_tuoi = row.get('minus_3sd_tuoi', lower_limit_cc)
             upper_limit_tuoi = row.get('minus_2sd_tuoi', upper_limit_cc)
         elif status_cn_tuoi == 'BT':
+            lower_limit_tuoi = row.get('minus_2sd_tuoi', lower_limit_cc)
             upper_limit_tuoi = row.get('plus_2sd_tuoi', upper_limit_cc)
         elif status_cn_tuoi == '+2 SD':
+            lower_limit_tuoi = row.get('plus_2sd_tuoi', lower_limit_cc)
             upper_limit_tuoi = row.get('plus_3sd_tuoi', upper_limit_cc)
         elif status_cn_tuoi == '+3 SD':
+            lower_limit_tuoi = row.get('plus_3sd_tuoi', lower_limit_cc)
             upper_limit_tuoi = current_weight + 5
         else:
+            lower_limit_tuoi = current_weight
             upper_limit_tuoi = current_weight + 5
         
-        # Lấy min của 2 ngưỡng để đảm bảo không vượt cả 2
+        # Lấy max của lower và min của upper để đảm bảo nằm trong cả 2 khoảng
+        lower_limit = max(lower_limit_cc, lower_limit_tuoi)
         upper_limit = min(upper_limit_cc, upper_limit_tuoi)
         
-        # Tăng lên và lấy min với ngưỡng
-        new_weight = current_weight + increase
-        return min(new_weight, upper_limit)
+        # Tăng lên và giữ trong khoảng (lower, upper)
+        new_weight = max(current_weight, lower_limit)  # Đảm bảo >= lower
+        new_weight = new_weight + increase              # Cộng random
+        new_weight = min(new_weight, upper_limit)       # Đảm bảo <= upper
+        return new_weight
     
     df_merged['can_nang_tmp'] = [calc_weight_adj(row, random_increases[idx]) for idx, (_, row) in enumerate(df_merged.iterrows())]
     df_merged['can_nang_tmp'] = df_merged['can_nang_tmp'].round(1)
@@ -382,6 +404,7 @@ def summary_statistics(df: pd.DataFrame, max_months: Optional[int] = None) -> di
     sdd_cn_cc_gai = len(sdd_cn_cc[sdd_cn_cc['gioi_tinh'] == 'gai'])
     sdd_cn_cc_2sd = len(df_cn_cc[df_cn_cc['execute_cn_cc'] == '-2 SD'])
     sdd_cn_cc_3sd = len(df_cn_cc[df_cn_cc['execute_cn_cc'] == '-3 SD'])
+    ty_le_sdd_cn_cc = len(sdd_cn_cc) / len(df_cn_cc) * 100 if len(df_cn_cc) > 0 else 0
     
     # === THỪA CÂN, BÉO PHÌ (CC/Tuổi và CN/CC) ===
     # Thừa cân CC/tuổi
@@ -421,7 +444,8 @@ def summary_statistics(df: pd.DataFrame, max_months: Optional[int] = None) -> di
         },
         'sdd_cn_cc': {
             'tong': len(sdd_cn_cc), 'trai': sdd_cn_cc_trai, 'gai': sdd_cn_cc_gai,
-            'muc_2sd': sdd_cn_cc_2sd, 'muc_3sd': sdd_cn_cc_3sd
+            'muc_2sd': sdd_cn_cc_2sd, 'muc_3sd': sdd_cn_cc_3sd,
+            'ty_le': round(ty_le_sdd_cn_cc, 2)
         },
         'thua_can_beo_phi': {
             'cc_tuoi': {
@@ -475,29 +499,129 @@ def print_summary(summary: dict, title: str = "TRẺ DƯỚI 2 TUỔI"):
     print(f"\n{'='*60}\n")
 
 
+def summary_table(summary: dict) -> pd.DataFrame:
+    """Chuyển summary dict thành DataFrame dạng bảng phẳng để in/excel."""
+    s = summary
+    tc = s['thua_can_beo_phi']
+    total = s['tong_so_tre']['tong'] or 1  # tránh chia 0
+    # Gộp thừa cân/béo phì từ cả CC/Tuổi và CN/CC (có thể trùng; dùng cộng đơn giản)
+    beo_phi_tong = tc['cc_tuoi']['tong'] + tc['cn_cc']['tong']
+    beo_phi_trai = tc['cc_tuoi']['trai'] + tc['cn_cc']['trai']
+    beo_phi_gai = tc['cc_tuoi']['gai'] + tc['cn_cc']['gai']
+    ty_le_beo_phi = round(beo_phi_tong / total * 100, 2)
+
+    row = {
+        'Tổng số trẻ': s['tong_so_tre']['tong'],
+        'Trai': s['tong_so_tre']['trai'],
+        'Gái': s['tong_so_tre']['gai'],
+        'Được cân': s['tre_duoc_can']['tong'],
+        'Được cân (Trai)': s['tre_duoc_can']['trai'],
+        'Được cân (Gái)': s['tre_duoc_can']['gai'],
+        'Tỷ lệ cân (%)': s['tre_duoc_can']['ty_le'],
+        'SDD CN/tuổi': s['sdd_cn_tuoi']['tong'],
+        'SDD CN/tuổi (Trai)': s['sdd_cn_tuoi']['trai'],
+        'SDD CN/tuổi (Gái)': s['sdd_cn_tuoi']['gai'],
+        'Tỷ lệ SDD CN/tuổi (%)': s['sdd_cn_tuoi']['ty_le'],
+        'SDD CC/tuổi': s['sdd_cc_tuoi']['tong'],
+        'SDD CC/tuổi (Trai)': s['sdd_cc_tuoi']['trai'],
+        'SDD CC/tuổi (Gái)': s['sdd_cc_tuoi']['gai'],
+        'Tỷ lệ SDD CC/tuổi (%)': s['sdd_cc_tuoi']['ty_le'],
+        'SDD CN/CC': s['sdd_cn_cc']['tong'],
+        'SDD CN/CC (Trai)': s['sdd_cn_cc']['trai'],
+        'SDD CN/CC (Gái)': s['sdd_cn_cc']['gai'],
+        'Tỷ lệ SDD CN/CC (%)': s['sdd_cn_cc']['ty_le'],
+        'Béo phì': beo_phi_tong,
+        'Béo phì (Trai)': beo_phi_trai,
+        'Béo phì (Gái)': beo_phi_gai,
+        'Tỷ lệ béo phì (%)': ty_le_beo_phi,
+    }
+
+    return pd.DataFrame([row])
+
+
+def combine_summaries(summaries: list[dict]) -> Optional[dict]:
+    """Gộp nhiều summary (đã cùng cấu trúc) thành một summary cộng gộp.
+
+    Cộng tất cả các chỉ số đếm, sau đó tính lại tỷ lệ dựa trên tổng gộp, không trung bình cộng.
+    """
+    if not summaries:
+        return None
+
+    def add(a: dict, b: dict, keys: list[str]):
+        for k in keys:
+            a[k] = a.get(k, 0) + b.get(k, 0)
+
+    agg = {
+        'tong_so_tre': {'tong': 0, 'trai': 0, 'gai': 0},
+        'tre_duoc_can': {'tong': 0, 'trai': 0, 'gai': 0},
+        'tre_duoc_do': {'tong': 0, 'trai': 0, 'gai': 0},
+        'sdd_cn_tuoi': {'tong': 0, 'trai': 0, 'gai': 0, 'muc_2sd': 0, 'muc_3sd': 0, 'thua_2sd_3sd': 0},
+        'sdd_cc_tuoi': {'tong': 0, 'trai': 0, 'gai': 0, 'muc_2sd': 0, 'muc_3sd': 0},
+        'sdd_cn_cc': {'tong': 0, 'trai': 0, 'gai': 0, 'muc_2sd': 0, 'muc_3sd': 0},
+        'thua_can_beo_phi': {
+            'cc_tuoi': {'tong': 0, 'trai': 0, 'gai': 0, 'muc_2sd': 0, 'muc_3sd': 0},
+            'cn_cc': {'tong': 0, 'trai': 0, 'gai': 0, 'muc_2sd': 0, 'muc_3sd': 0}
+        }
+    }
+
+    for s in summaries:
+        add(agg['tong_so_tre'], s['tong_so_tre'], ['tong', 'trai', 'gai'])
+        add(agg['tre_duoc_can'], s['tre_duoc_can'], ['tong', 'trai', 'gai'])
+        add(agg['tre_duoc_do'], s['tre_duoc_do'], ['tong', 'trai', 'gai'])
+
+        add(agg['sdd_cn_tuoi'], s['sdd_cn_tuoi'], ['tong', 'trai', 'gai', 'muc_2sd', 'muc_3sd', 'thua_2sd_3sd'])
+        add(agg['sdd_cc_tuoi'], s['sdd_cc_tuoi'], ['tong', 'trai', 'gai', 'muc_2sd', 'muc_3sd'])
+        add(agg['sdd_cn_cc'], s['sdd_cn_cc'], ['tong', 'trai', 'gai', 'muc_2sd', 'muc_3sd'])
+
+        add(agg['thua_can_beo_phi']['cc_tuoi'], s['thua_can_beo_phi']['cc_tuoi'], ['tong', 'trai', 'gai', 'muc_2sd', 'muc_3sd'])
+        add(agg['thua_can_beo_phi']['cn_cc'], s['thua_can_beo_phi']['cn_cc'], ['tong', 'trai', 'gai', 'muc_2sd', 'muc_3sd'])
+
+    total = agg['tong_so_tre']['tong']
+    len_can = agg['tre_duoc_can']['tong']
+    len_do = agg['tre_duoc_do']['tong']
+    len_cn_cc = agg['sdd_cn_cc']['tong'] + (agg['sdd_cn_cc']['muc_2sd'] + agg['sdd_cn_cc']['muc_3sd'] - agg['sdd_cn_cc']['tong']) if agg['sdd_cn_cc']['tong'] else agg['tre_duoc_can']['tong']
+
+    agg['tre_duoc_can']['ty_le'] = round(len_can / total * 100, 2) if total > 0 else 0
+    agg['tre_duoc_do']['ty_le'] = round(len_do / total * 100, 2) if total > 0 else 0
+
+    agg['sdd_cn_tuoi']['ty_le'] = round(agg['sdd_cn_tuoi']['tong'] / len_can * 100, 2) if len_can > 0 else 0
+    agg['sdd_cc_tuoi']['ty_le'] = round(agg['sdd_cc_tuoi']['tong'] / len_do * 100, 2) if len_do > 0 else 0
+    # len_cn_cc lấy theo số dòng có execute_cn_cc, ở đây dùng len_can như xấp xỉ nếu thiếu
+    denom_cn_cc = len_cn_cc if len_cn_cc > 0 else len_can
+    agg['sdd_cn_cc']['ty_le'] = round(agg['sdd_cn_cc']['tong'] / denom_cn_cc * 100, 2) if denom_cn_cc > 0 else 0
+
+    return agg
+
+
+def export_summary_table_to_excel(summary: dict, excel_path: str, sheet_name: str = 'Summary') -> None:
+    """Ghi bảng tổng hợp ra Excel (tạo file mới hoặc ghi đè)."""
+    df_table = summary_table(summary)
+    df_table.to_excel(excel_path, sheet_name=sheet_name, index=False)
+
+
 def write_column_to_excel(
     df: pd.DataFrame,
     df_column: str,
     excel_path: str,
     excel_column: str,
     start_row: int = 7,
-    sheet_name: Optional[str] = None
+    sheet_name: str = 'Sheet1'
 ) -> None:
     """
     Ghi đè 1 cột từ DataFrame vào 1 cột trong file Excel.
-    Chỉ ghi đè phần nội dung, giữ nguyên header.
+    Chỉ ghi đè phần nội dung, giữ nguyên header và format.
     
     Args:
         df: DataFrame chứa dữ liệu cần ghi
         df_column: Tên cột trong DataFrame cần lấy dữ liệu
         excel_path: Đường dẫn file Excel
         excel_column: Tên cột trong Excel (A, B, C, ... hoặc AA, AB, ...)
-        start_row: Hàng bắt đầu ghi (mặc định là 8)
-        sheet_name: Tên sheet (None = sheet đầu tiên)
+        start_row: Hàng bắt đầu ghi (mặc định là 7)
+        sheet_name: Tên sheet (mặc định là 'Sheet1')
     """
-    # Load workbook
+    # Load workbook - giữ nguyên format
     wb = load_workbook(excel_path)
-    ws = wb.active if sheet_name is None else wb[sheet_name]
+    ws = wb[sheet_name]
     
     if ws is None:
         wb.close()
@@ -506,16 +630,16 @@ def write_column_to_excel(
     # Lấy dữ liệu từ DataFrame
     data = df[df_column].tolist()
     
-    # Ghi từng giá trị vào Excel
+    # Ghi từng giá trị vào Excel - chỉ thay đổi value, giữ nguyên format của cell
     for i, value in enumerate(data):
         row = start_row + i
-        cell = f"{excel_column}{row}"
+        cell = ws[f"{excel_column}{row}"]
         
-        # Xử lý giá trị NaN/None
+        # Xử lý giá trị NaN/None - chỉ ghi value, không thay đổi style
         if pd.isna(value):
-            ws[cell] = None
+            cell.value = None
         else:
-            ws[cell] = value
+            cell.value = value
     
     # Lưu file
     wb.save(excel_path)

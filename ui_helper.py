@@ -1,6 +1,8 @@
+from datetime import datetime
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from threading import Thread
+from process_helper import summary_table, combine_summaries
 
 
 class AppUI:
@@ -10,6 +12,8 @@ class AppUI:
         self.window.geometry("1000x750")
         
         self.file_path = ''
+        self.folder_path = ''
+        self.is_folder_mode = False
         self.target_date = ''
         
         self._create_menu()
@@ -37,13 +41,16 @@ class AppUI:
         lbl_title.pack(pady=10)
         
         # === FRAME CHỌN FILE ===
-        frame_file = ttk.LabelFrame(self.window, text="Chọn file Excel", padding=10)
+        frame_file = ttk.LabelFrame(self.window, text="Chọn file Excel hoặc Folder", padding=10)
         frame_file.pack(fill="x", padx=20, pady=10)
         
-        self.lbl_file = ttk.Label(frame_file, text="Chưa chọn file...", font=("Arial", 10))
+        self.lbl_file = ttk.Label(frame_file, text="Chưa chọn file/folder...", font=("Arial", 10))
         self.lbl_file.pack(side="left", fill="x", expand=True)
         
-        btn_browse = ttk.Button(frame_file, text="Duyệt...", command=self._open_file)
+        btn_browse_folder = ttk.Button(frame_file, text="Chọn Folder", command=self._open_folder)
+        btn_browse_folder.pack(side="right", padx=5)
+        
+        btn_browse = ttk.Button(frame_file, text="Chọn File", command=self._open_file)
         btn_browse.pack(side="right")
         
         # === FRAME NGÀY TARGET ===
@@ -53,7 +60,7 @@ class AppUI:
         ttk.Label(frame_date, text="Ngày target (dd/mm/yyyy):").pack(side="left")
         self.entry_date = ttk.Entry(frame_date, width=15)
         self.entry_date.pack(side="left", padx=10)
-        self.entry_date.insert(0, "30/06/2021")
+        self.entry_date.insert(0, datetime.now().strftime("%d/%m/%Y"))
         
         # === FRAME CHỨC NĂNG ===
         frame_functions = ttk.LabelFrame(self.window, text="Chức năng", padding=10)
@@ -61,12 +68,12 @@ class AppUI:
         
         # Checkbox variables
         self.var_calc_month = tk.BooleanVar()
-        self.var_sdd = tk.BooleanVar(value=True)
-        self.var_cncc = tk.BooleanVar(value=True)
+        self.var_sdd = tk.BooleanVar()
+        self.var_cncc = tk.BooleanVar()
         self.var_adj_height = tk.BooleanVar()
         self.var_adj_weight = tk.BooleanVar()
         self.var_export = tk.BooleanVar()
-        self.var_overwrite = tk.BooleanVar(value=True)
+        self.var_overwrite = tk.BooleanVar()
         self.var_summary_2 = tk.BooleanVar()
         self.var_summary_5 = tk.BooleanVar()
         
@@ -126,9 +133,21 @@ class AppUI:
         file_path = filedialog.askopenfilename(filetypes=filetypes)
         if file_path:
             self.file_path = file_path
+            self.folder_path = ''
+            self.is_folder_mode = False
             self.lbl_file.configure(text=file_path)
             self._log(f"Đã chọn file: {file_path}")
             self.load_target_file()
+    
+    def _open_folder(self):
+        """Mở dialog chọn folder"""
+        folder_path = filedialog.askdirectory()
+        if folder_path:
+            self.folder_path = folder_path
+            self.file_path = ''
+            self.is_folder_mode = True
+            self.lbl_file.configure(text=f"📁 {folder_path}")
+            self._log(f"Đã chọn folder: {folder_path}")
     
     def _log(self, message: str):
         """Ghi log vào text box"""
@@ -139,57 +158,245 @@ class AppUI:
         """Xóa log"""
         self.txt_result.delete(1.0, tk.END)
     
-    def _print_summary(self, text: str):
-        """Hiển thị popup cửa sổ với nội dung text"""
-        # Tạo cửa sổ popup
+    def _print_summary(self, text: str, file_path: str = ""):
+        """Hiển thị popup cửa sổ với nội dung text, kèm tên file đang thống kê."""
         popup = tk.Toplevel(self.window)
         popup.title("Thống kê dinh dưỡng")
-        popup.geometry("500x400")
+        popup.geometry("520x420")
         popup.resizable(True, True)
-        
-        # Text widget với scrollbar
+
         frame = ttk.Frame(popup, padding=10)
         frame.pack(fill="both", expand=True)
-        
+
+        if file_path:
+            ttk.Label(frame, text=f"File: {file_path}", foreground="blue").pack(anchor="w", pady=(0, 6))
+
         txt = tk.Text(frame, font=("Consolas", 10), wrap="word")
         scrollbar = ttk.Scrollbar(frame, orient="vertical", command=txt.yview)
         txt.configure(yscrollcommand=scrollbar.set)
-        
+
         txt.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
-        
-        # Chèn nội dung
+
         txt.insert(tk.END, text)
-        txt.config(state="disabled")  # Không cho chỉnh sửa
-        
-        # Nút đóng
-        btn_close = ttk.Button(popup, text="Đóng", command=popup.destroy)
-        btn_close.pack(pady=10)
-        
-        # Focus vào popup
-        popup.focus_set()
-        popup.grab_set()
+        txt.config(state="disabled")
+
+        ttk.Button(popup, text="Đóng", command=popup.destroy).pack(pady=10)
+
+    def _print_summary_df(self, df, file_path: str = ""):
+        """Hiển thị DataFrame thống kê trong popup, kèm tên file."""
+        popup = tk.Toplevel(self.window)
+        popup.title("Bảng thống kê")
+        popup.geometry("920x520")
+        popup.resizable(True, True)
+
+        frame = ttk.Frame(popup, padding=10)
+        frame.pack(fill="both", expand=True)
+
+        if file_path:
+            ttk.Label(frame, text=f"File: {file_path}", foreground="blue").pack(anchor="w", pady=(0, 6))
+
+        txt = tk.Text(frame, font=("Consolas", 10), wrap="none")
+        scrollbar_y = ttk.Scrollbar(frame, orient="vertical", command=txt.yview)
+        scrollbar_x = ttk.Scrollbar(frame, orient="horizontal", command=txt.xview)
+        txt.configure(yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
+
+        txt.pack(side="left", fill="both", expand=True)
+        scrollbar_y.pack(side="right", fill="y")
+        scrollbar_x.pack(side="bottom", fill="x")
+
+        txt.insert(tk.END, df.to_string(index=False))
+        txt.config(state="disabled")
+
+        ttk.Button(popup, text="Đóng", command=popup.destroy).pack(pady=8)
     
     def _on_execute(self):
         """Xử lý khi nhấn nút Thực hiện"""
-        if not self.file_path:
-            messagebox.showwarning("Cảnh báo", "Vui lòng chọn file Excel trước!")
+        if not self.file_path and not self.folder_path:
+            messagebox.showwarning("Cảnh báo", "Vui lòng chọn file Excel hoặc folder trước!")
             return
         
         # Chạy trong thread riêng để không block UI
-        thread = Thread(target=self._execute_tasks)
+        if self.is_folder_mode:
+            thread = Thread(target=self._execute_folder_tasks)
+        else:
+            thread = Thread(target=self._execute_tasks)
         thread.start()
     
+    def _execute_folder_tasks(self):
+        """Xử lý tất cả file trong folder, kèm thống kê đa tầng (file và folder)."""
+        from pathlib import Path
+        import pandas as pd
+        
+        self._clear_log()
+        self._log("=" * 50)
+        self._log(f"BẮT ĐẦU XỬ LÝ FOLDER: {self.folder_path}")
+        self._log("=" * 50)
+        
+        root = Path(self.folder_path).resolve()
+        all_xlsx_files = list(root.rglob('*.xlsx'))
+        xlsx_files = [f for f in all_xlsx_files if not f.stem.endswith('_ketqua')]
+        
+        skipped_count = len(all_xlsx_files) - len(xlsx_files)
+        if skipped_count > 0:
+            self._log(f"\n⏭ Bỏ qua {skipped_count} file kết quả (_ketqua)")
+        
+        if not xlsx_files:
+            self._log("\n❌ Không tìm thấy file Excel nào trong folder!")
+            messagebox.showwarning("Cảnh báo", "Không tìm thấy file Excel nào trong folder!")
+            return
+        
+        self._log(f"\nTìm thấy {len(xlsx_files)} file Excel")
+        self._log("-" * 50)
+        
+        success_count = 0
+        failed_files = []
+        summaries_2 = []  # (path, summary)
+        summaries_5 = []
+        
+        for i, xlsx_file in enumerate(xlsx_files, 1):
+            self._log(f"\n[{i}/{len(xlsx_files)}] Đang xử lý: {xlsx_file.name}")
+            try:
+                self.file_path = str(xlsx_file)
+                self.load_target_file()
+                self._process_single_file()
+
+                if self.var_summary_2.get():
+                    s2 = self.summary_statistics(max_months=24)
+                    summaries_2.append((self.file_path, s2))
+                    self._log("    ✓ Thống kê ≤24 tháng")
+
+                if self.var_summary_5.get():
+                    s5 = self.summary_statistics(max_months=60)
+                    summaries_5.append((self.file_path, s5))
+                    self._log("    ✓ Thống kê ≤60 tháng")
+
+                success_count += 1
+                self._log("    ✓ Hoàn thành")
+            except Exception as e:
+                failed_files.append((xlsx_file.name, str(e)))
+                self._log(f"    ❌ Lỗi: {str(e)}")
+        
+        def build_file_df(summaries):
+            rows = []
+            for path_str, summary in summaries:
+                df_row = summary_table(summary)
+                df_row.insert(0, 'Đường dẫn', path_str)
+                df_row.insert(0, 'Loại', 'File')
+                df_row['depth'] = None
+                rows.append(df_row)
+            if not rows:
+                return None
+            return pd.concat(rows, ignore_index=True)
+
+        def build_folder_df(summaries):
+            if not summaries:
+                return None
+            folder_groups = {}
+            for path_str, summary in summaries:
+                p = Path(path_str).resolve()
+                # cộng dồn cho tất cả ancestor trong root
+                for folder in [p.parent] + list(p.parents):
+                    if folder < root:  # ra ngoài root thì dừng
+                        break
+                    folder_groups.setdefault(str(folder), []).append(summary)
+                    if folder == root:
+                        break
+            rows = []
+            for folder_path, lst in folder_groups.items():
+                combined = combine_summaries(lst)
+                if combined is None:
+                    continue
+                df_row = summary_table(combined)
+                df_row.insert(0, 'Đường dẫn', folder_path)
+                df_row.insert(0, 'Loại', 'Tổng folder')
+                relative = Path(folder_path).resolve().relative_to(root)
+                depth = len(relative.parts)
+                df_row['depth'] = depth
+                rows.append(df_row)
+            return pd.concat(rows, ignore_index=True) if rows else None
+
+        def combine_file_folder(df_files, df_folders):
+            frames = []
+            if df_files is not None:
+                frames.append(df_files)
+            if df_folders is not None:
+                frames.append(df_folders)
+            if not frames:
+                return None
+            combined = pd.concat(frames, ignore_index=True)
+            if 'Loại' in combined.columns:
+                order_map = {'File': 0, 'Tổng folder': 1}
+                combined['__order'] = combined['Loại'].map(order_map).fillna(99)
+                if 'depth' in combined.columns:
+                    combined['depth'] = pd.to_numeric(combined['depth'], errors='coerce')
+                combined = combined.sort_values(by=['__order', 'depth'], ascending=[True, False], ignore_index=True)
+                combined = combined.drop(columns=['__order', 'depth'], errors='ignore')
+            return combined
+
+        def export_summary_excels(df_under_2, df_under_5):
+            if df_under_2 is None and df_under_5 is None:
+                return None
+            out_path = root / "summary_folder.xlsx"
+            with pd.ExcelWriter(out_path) as writer:
+                if df_under_2 is not None:
+                    df_under_2.to_excel(writer, sheet_name='Dưới 2 tuổi', index=False)
+                if df_under_5 is not None:
+                    df_under_5.to_excel(writer, sheet_name='Dưới 5 tuổi', index=False)
+            return out_path
+
+        df_files_2 = build_file_df(summaries_2) if self.var_summary_2.get() else None
+        df_files_5 = build_file_df(summaries_5) if self.var_summary_5.get() else None
+        df_folders_2 = build_folder_df(summaries_2) if self.var_summary_2.get() else None
+        df_folders_5 = build_folder_df(summaries_5) if self.var_summary_5.get() else None
+
+        df_under_2 = combine_file_folder(df_files_2, df_folders_2) if self.var_summary_2.get() else None
+        df_under_5 = combine_file_folder(df_files_5, df_folders_5) if self.var_summary_5.get() else None
+
+        out_path = export_summary_excels(df_under_2, df_under_5)
+
+        # Summary
+        self._log("\n" + "=" * 50)
+        self._log(f"HOÀN THÀNH: {success_count}/{len(xlsx_files)} files")
+        if failed_files:
+            self._log(f"\nCác file lỗi:")
+            for name, error in failed_files:
+                self._log(f"  - {name}: {error}")
+        if out_path:
+            self._log(f"\nĐã lưu thống kê: {out_path}")
+        self._log("=" * 50)
+        
+        messagebox.showinfo("Hoàn thành", f"Đã xử lý {success_count}/{len(xlsx_files)} files")
+    
+    def _process_single_file(self):
+        """Xử lý 1 file - được gọi từ cả single mode và folder mode"""
+        if self.var_calc_month.get():
+            self.execute_month_age()
+        
+        if self.var_sdd.get():
+            self.execute_weight_by_age()
+            self.execute_height_by_age()
+        
+        if self.var_cncc.get():
+            self.execute_weight_by_height()
+        
+        if self.var_adj_height.get():
+            self.adjust_height()
+        
+        if self.var_adj_weight.get():
+            self.adjust_weight()
+        
+        if self.var_export.get():
+            self.export_to_excel()
+    
     def _execute_tasks(self):
-        """Thực hiện các tác vụ đã chọn"""
+        """Thực hiện các tác vụ đã chọn (single file mode)"""
         self._clear_log()
         self._log("=" * 50)
         self._log("BẮT ĐẦU XỬ LÝ...")
         self._log("=" * 50)
         
         try:
-            target_date = self.entry_date.get()
-            
             if self.var_calc_month.get():
                 self._log("\n[1] Đang tính tháng tuổi...")
                 self.execute_month_age()
@@ -225,14 +432,14 @@ class AppUI:
                 self._log("\n[7] Thống kê trẻ dưới 2 tuổi:")
                 summary = self.summary_statistics(max_months=24)
                 text = self.format_summary(summary, "TRẺ DƯỚI 2 TUỔI (≤24 tháng)")
-                self._print_summary(text)
+                self._print_summary(text, file_path=self.file_path)
                 self._log("    ✓ Đã hiển thị thống kê")
             
             if self.var_summary_5.get():
                 self._log("\n[8] Thống kê trẻ dưới 5 tuổi:")
                 summary = self.summary_statistics(max_months=60)
                 text = self.format_summary(summary, "TRẺ DƯỚI 5 TUỔI (≤60 tháng)")
-                self._print_summary(text)
+                self._print_summary(text, file_path=self.file_path)
                 self._log("    ✓ Đã hiển thị thống kê")
             
             self._log("\n" + "=" * 50)

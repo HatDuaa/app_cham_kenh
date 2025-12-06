@@ -18,13 +18,17 @@ class mainApp(AppUI):
         self.df_weight_by_age = load_cn_per_old()
         self.df_height_by_age = load_cc_per_old()
         self.df_weight_by_height_0_2 = load_cn_cc('CN_CC_0-2_tuoi.xlsx')
-        self.df_weight_by_height_2_5 = load_cn_cc('CN_CC_2-5_tuoi.xlsx') 
+        self.df_weight_by_height_2_5 = load_cn_cc('CN_CC_2-5_tuoi.xlsx')
 
     def load_target_file(self):
         self.df_children = load_danh_sach_can_do(self.file_path)
 
     def execute_month_age(self):
-        self.df_children = apply_month_age(self.df_children, birth_col='ngay_sinh', target_date='ngay_do')
+        target_date_str = self.entry_date.get()
+        target_date = datetime.strptime(target_date_str, "%d/%m/%Y")
+        self.df_children = apply_month_age(self.df_children, birth_col='ngay_sinh', target_date=target_date)
+        if self.var_overwrite.get():
+            write_column_to_excel(self.df_children, 'thang_tuoi', self.file_path, 'F', start_row=7)
     
     def execute_weight_by_age(self):
         self.df_children = execute_weight_by_age(self.df_children, self.df_weight_by_age)

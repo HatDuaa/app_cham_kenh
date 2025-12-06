@@ -66,9 +66,9 @@ def load_cn_cc(file_path: str) -> pd.DataFrame:
     return result
 
 
-def load_danh_sach_can_do(file_path: str) -> pd.DataFrame:
+def load_danh_sach_can_do(file_path: str, sheet_name: str = 'Sheet1') -> pd.DataFrame:
     """Load danh sách cân đo trẻ em (format mới 2025)"""
-    df = pd.read_excel(file_path, skiprows=6, header=None)
+    df = pd.read_excel(file_path, sheet_name=sheet_name, skiprows=6, header=None)
     
     # Cột: 0-STT, 1-Họ tên, 2-Nam, 3-Nữ, 4-Ngày sinh, 5-Tháng tuổi, 6-Họ tên mẹ, 
     #      7-Cân nặng, 8-TT CN/Tuổi, 9-Chiều cao, 10-TT CC/Tuổi, 11-CN/CC
@@ -116,7 +116,7 @@ def export_to_excel(
     df_result: pd.DataFrame,
     input_file: str = None,
     output_file: str = None,
-    data_start_row: int = 8,
+    data_start_row: int = 7,
     sheet_name: str = None
 ) -> None:
     """
