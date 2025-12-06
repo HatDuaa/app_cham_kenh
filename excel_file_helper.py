@@ -2,6 +2,8 @@ import openpyxl
 import pandas as pd
 import os
 import shutil
+from typing import Optional
+
 
 
 
@@ -114,10 +116,12 @@ def load_danh_sach_can_do(file_path: str, sheet_name: str = 'Sheet1') -> pd.Data
 
 def export_to_excel(
     df_result: pd.DataFrame,
-    input_file: str = None,
-    output_file: str = None,
+    input_file: Optional[str] = None,
+    output_file: Optional[str] = None,
     data_start_row: int = 7,
-    sheet_name: str = None
+    sheet_name: Optional[str] = None,
+    under5_table: Optional[pd.DataFrame] = None,
+    under5_sheet_name: str = 'Thong ke <5T'
 ) -> None:
     """
     Copy file Excel gốc và ghi kết quả vào, giữ nguyên định dạng.
@@ -164,7 +168,7 @@ def export_to_excel(
     
     # Ghi từng dòng data
     for idx, row in df_result.iterrows():
-        excel_row = data_start_row + idx
+        excel_row = int(data_start_row) + int(idx)
         
         for col_name, excel_col in column_mapping.items():
             if col_name in row.index:
@@ -180,6 +184,86 @@ def export_to_excel(
                 ws[f"{excel_col}{excel_row}"] = cell_value
     
     # Lưu file
+    # Thêm sheet thống kê <5T nếu có
+    if under5_table is not None:
+        if under5_sheet_name in wb.sheetnames:
+            del wb[under5_sheet_name]
+        ws_stat = wb.create_sheet(under5_sheet_name)
+        # Header
+        for col_idx, col_name in enumerate(under5_table.columns, start=1):
+            ws_stat.cell(row=1, column=col_idx, value=col_name)
+        # Data
+        for row_idx, row in enumerate(under5_table.itertuples(index=False), start=2):
+            for col_idx, value in enumerate(row, start=1):
+                ws_stat.cell(row=row_idx, column=col_idx, value=value)
+
     wb.save(output_file)
+    wb.close()
+
+
+def build_under5_statistics_table(summary: dict) -> pd.DataFrame:
+    """Tạo bảng thống kê trẻ <5 tuổi (Tổng/Nam/Nữ) theo cấu trúc yêu cầu."""
+
+    def get(section: str, gender: str | None) -> int:
+        # Lấy giá trị theo giới tính nếu có, ngược lại lấy tổng
+        if gender:
+            return summary.get(section, {}).get(gender, 0)
+        return summary.get(section, {}).get('tong', 0)
+
+    def rate(numerator: int, denominator: int) -> float:
+        return round(numerator / denominator * 100, 2) if denominator else 0.0
+
+    def make_row(stt, label: str, gender: str | None):
+        total = get('tong_so_tre', gender)
+        can_do = get('tre_duoc_can', gender)
+        sdd_cn_tuoi = get('sdd_cn_tuoi', gender)
+        sdd_cc_tuoi = get('sdd_cc_tuoi', gender)
+        sdd_cn_cc = get('sdd_cn_cc', gender)
+        thua_can_bp = get('thua_can_beo_phi', gender)
+
+        return {
+            'STT': stt,
+            'Chỉ số': label,
+            'Số trẻ dưới 5 tuổi': total,
+            'Số trẻ dưới 5 tuổi được cân, đo': can_do,
+            'Số TE <5T bị SDD thể nhẹ cân (CN/T)': sdd_cn_tuoi,
+            'Số TE <5T bị SDD thể thấp còi (CC/T)': sdd_cc_tuoi,
+            'Số TE <5 tuổi bị SDD thể gầy còm (CN/CC)': sdd_cn_cc,
+            'Số TE <5 tuổi bị Thừa cân, béo phì': thua_can_bp,
+            'Tỷ lệ Cân nặng/tuổi (thể nhẹ cân)': rate(sdd_cn_tuoi, total),
+            'Tỷ lệ Chiều cao/tuổi (thể thấp còi)': rate(sdd_cc_tuoi, total),
+            'Tỷ lệ Cân nặng/chiều cao (thể gầy còm)': rate(sdd_cn_cc, total),
+            'Tỷ lệ Thừa cân, Béo phì': rate(thua_can_bp, total),
+        }
+
+    rows = [
+        make_row('', 'Tổng số', None),
+        make_row(1, 'Nam', 'trai'),
+        make_row(2, 'Nữ', 'gai'),
+    ]
+
+    return pd.DataFrame(rows)
+
+
+def export_under5_statistics_sheet(summary: dict, excel_path: str, sheet_name: str = 'Thong ke <5T') -> None:
+    """Ghi thêm sheet thống kê <5 tuổi (Tổng/Nam/Nữ) vào file Excel."""
+    df_table = build_under5_statistics_table(summary)
+
+    # Load workbook (tạo mới sheet, nếu đã tồn tại thì xóa để ghi lại)
+    wb = openpyxl.load_workbook(excel_path)
+    if sheet_name in wb.sheetnames:
+        del wb[sheet_name]
+    ws = wb.create_sheet(sheet_name)
+
+    # Ghi header
+    for col_idx, col_name in enumerate(df_table.columns, start=1):
+        ws.cell(row=1, column=col_idx, value=col_name)
+
+    # Ghi data
+    for row_idx, row in enumerate(df_table.itertuples(index=False), start=2):
+        for col_idx, value in enumerate(row, start=1):
+            ws.cell(row=row_idx, column=col_idx, value=value)
+
+    wb.save(excel_path)
     wb.close()
         

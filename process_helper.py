@@ -386,7 +386,8 @@ def summary_statistics(df: pd.DataFrame, max_months: Optional[int] = None) -> di
     sdd_cn_tuoi_3sd = len(df_can[df_can['execute_cn_tuoi'] == '-3 SD'])
     # Thừa cân: +2SD, +3SD
     thua_cn_tuoi = df_can[df_can['execute_cn_tuoi'].isin(['+2 SD', '+3 SD'])]
-    thua_cn_tuoi_2sd_3sd = len(thua_cn_tuoi)
+    thua_cn_tuoi_trai = len(thua_cn_tuoi[thua_cn_tuoi['gioi_tinh'] == 'trai'])
+    thua_cn_tuoi_gai = len(thua_cn_tuoi[thua_cn_tuoi['gioi_tinh'] == 'gai'])
     ty_le_sdd_cn_tuoi = len(sdd_cn_tuoi) / len(df_can) * 100 if len(df_can) > 0 else 0
     
     # === SDD CHIỀU CAO/TUỔI ===
@@ -406,20 +407,12 @@ def summary_statistics(df: pd.DataFrame, max_months: Optional[int] = None) -> di
     sdd_cn_cc_3sd = len(df_cn_cc[df_cn_cc['execute_cn_cc'] == '-3 SD'])
     ty_le_sdd_cn_cc = len(sdd_cn_cc) / len(df_cn_cc) * 100 if len(df_cn_cc) > 0 else 0
     
-    # === THỪA CÂN, BÉO PHÌ (CC/Tuổi và CN/CC) ===
-    # Thừa cân CC/tuổi
-    thua_cc_tuoi = df_do[df_do['execute_cc_tuoi'].isin(['+2 SD', '+3 SD'])]
-    thua_cc_tuoi_trai = len(thua_cc_tuoi[thua_cc_tuoi['gioi_tinh'] == 'trai'])
-    thua_cc_tuoi_gai = len(thua_cc_tuoi[thua_cc_tuoi['gioi_tinh'] == 'gai'])
-    thua_cc_tuoi_2sd = len(df_do[df_do['execute_cc_tuoi'] == '+2 SD'])
-    thua_cc_tuoi_3sd = len(df_do[df_do['execute_cc_tuoi'] == '+3 SD'])
-    
-    # Thừa cân CN/CC
-    thua_cn_cc = df_cn_cc[df_cn_cc['execute_cn_cc'].isin(['+2 SD', '+3 SD'])]
-    thua_cn_cc_trai = len(thua_cn_cc[thua_cn_cc['gioi_tinh'] == 'trai'])
-    thua_cn_cc_gai = len(thua_cn_cc[thua_cn_cc['gioi_tinh'] == 'gai'])
-    thua_cn_cc_2sd = len(df_cn_cc[df_cn_cc['execute_cn_cc'] == '+2 SD'])
-    thua_cn_cc_3sd = len(df_cn_cc[df_cn_cc['execute_cn_cc'] == '+3 SD'])
+    # === THỪA CÂN, BÉO PHÌ ===
+    # Chỉ tính béo phì từ CN/Tuổi (+2SD, +3SD)
+    beo_phi_df = df_can[df_can['execute_cn_tuoi'].isin(['+2 SD', '+3 SD'])]
+    beo_phi_tong = len(beo_phi_df)
+    beo_phi_trai = len(beo_phi_df[beo_phi_df['gioi_tinh'] == 'trai'])
+    beo_phi_gai = len(beo_phi_df[beo_phi_df['gioi_tinh'] == 'gai'])
     
     result = {
         'tong_so_tre': {'tong': total, 'trai': total_trai, 'gai': total_gai},
@@ -434,7 +427,6 @@ def summary_statistics(df: pd.DataFrame, max_months: Optional[int] = None) -> di
         'sdd_cn_tuoi': {
             'tong': len(sdd_cn_tuoi), 'trai': sdd_cn_tuoi_trai, 'gai': sdd_cn_tuoi_gai,
             'muc_2sd': sdd_cn_tuoi_2sd, 'muc_3sd': sdd_cn_tuoi_3sd,
-            'thua_2sd_3sd': thua_cn_tuoi_2sd_3sd,
             'ty_le': round(ty_le_sdd_cn_tuoi, 2)
         },
         'sdd_cc_tuoi': {
@@ -448,14 +440,7 @@ def summary_statistics(df: pd.DataFrame, max_months: Optional[int] = None) -> di
             'ty_le': round(ty_le_sdd_cn_cc, 2)
         },
         'thua_can_beo_phi': {
-            'cc_tuoi': {
-                'tong': len(thua_cc_tuoi), 'trai': thua_cc_tuoi_trai, 'gai': thua_cc_tuoi_gai,
-                'muc_2sd': thua_cc_tuoi_2sd, 'muc_3sd': thua_cc_tuoi_3sd
-            },
-            'cn_cc': {
-                'tong': len(thua_cn_cc), 'trai': thua_cn_cc_trai, 'gai': thua_cn_cc_gai,
-                'muc_2sd': thua_cn_cc_2sd, 'muc_3sd': thua_cn_cc_3sd
-            }
+            'tong': beo_phi_tong, 'trai': beo_phi_trai, 'gai': beo_phi_gai
         }
     }
     
@@ -479,7 +464,6 @@ def print_summary(summary: dict, title: str = "TRẺ DƯỚI 2 TUỔI"):
     
     print(f"\n4. SDD CÂN NẶNG/TUỔI: {s['sdd_cn_tuoi']['tong']} (Trai: {s['sdd_cn_tuoi']['trai']}, Gái: {s['sdd_cn_tuoi']['gai']})")
     print(f"   - Mức -2SD: {s['sdd_cn_tuoi']['muc_2sd']}, Mức -3SD: {s['sdd_cn_tuoi']['muc_3sd']}")
-    print(f"   - Thừa cân (+2SD, +3SD): {s['sdd_cn_tuoi']['thua_2sd_3sd']}")
     print(f"   Tỷ lệ SDD: {s['sdd_cn_tuoi']['ty_le']}%")
     
     print(f"\n5. SDD CHIỀU CAO/TUỔI: {s['sdd_cc_tuoi']['tong']} (Trai: {s['sdd_cc_tuoi']['trai']}, Gái: {s['sdd_cc_tuoi']['gai']})")
@@ -489,12 +473,9 @@ def print_summary(summary: dict, title: str = "TRẺ DƯỚI 2 TUỔI"):
     print(f"\n6. SDD CÂN NẶNG/CHIỀU CAO: {s['sdd_cn_cc']['tong']} (Trai: {s['sdd_cn_cc']['trai']}, Gái: {s['sdd_cn_cc']['gai']})")
     print(f"   - Mức -2SD: {s['sdd_cn_cc']['muc_2sd']}, Mức -3SD: {s['sdd_cn_cc']['muc_3sd']}")
     
-    print(f"\n7. THỪA CÂN, BÉO PHÌ:")
+    print(f"\n7. THỪA CÂN, BÉO PHÌ (CN/Tuổi +2SD, +3SD):")
     tc = s['thua_can_beo_phi']
-    print(f"   CC/Tuổi: {tc['cc_tuoi']['tong']} (Trai: {tc['cc_tuoi']['trai']}, Gái: {tc['cc_tuoi']['gai']})")
-    print(f"      - Mức +2SD: {tc['cc_tuoi']['muc_2sd']}, Mức +3SD: {tc['cc_tuoi']['muc_3sd']}")
-    print(f"   CN/CC: {tc['cn_cc']['tong']} (Trai: {tc['cn_cc']['trai']}, Gái: {tc['cn_cc']['gai']})")
-    print(f"      - Mức +2SD: {tc['cn_cc']['muc_2sd']}, Mức +3SD: {tc['cn_cc']['muc_3sd']}")
+    print(f"   Tổng: {tc['tong']} (Trai: {tc['trai']}, Gái: {tc['gai']})")
     
     print(f"\n{'='*60}\n")
 
@@ -502,12 +483,10 @@ def print_summary(summary: dict, title: str = "TRẺ DƯỚI 2 TUỔI"):
 def summary_table(summary: dict) -> pd.DataFrame:
     """Chuyển summary dict thành DataFrame dạng bảng phẳng để in/excel."""
     s = summary
-    tc = s['thua_can_beo_phi']
     total = s['tong_so_tre']['tong'] or 1  # tránh chia 0
-    # Gộp thừa cân/béo phì từ cả CC/Tuổi và CN/CC (có thể trùng; dùng cộng đơn giản)
-    beo_phi_tong = tc['cc_tuoi']['tong'] + tc['cn_cc']['tong']
-    beo_phi_trai = tc['cc_tuoi']['trai'] + tc['cn_cc']['trai']
-    beo_phi_gai = tc['cc_tuoi']['gai'] + tc['cn_cc']['gai']
+    beo_phi_tong = s['thua_can_beo_phi']['tong']
+    beo_phi_trai = s['thua_can_beo_phi']['trai']
+    beo_phi_gai = s['thua_can_beo_phi']['gai']
     ty_le_beo_phi = round(beo_phi_tong / total * 100, 2)
 
     row = {
@@ -518,6 +497,10 @@ def summary_table(summary: dict) -> pd.DataFrame:
         'Được cân (Trai)': s['tre_duoc_can']['trai'],
         'Được cân (Gái)': s['tre_duoc_can']['gai'],
         'Tỷ lệ cân (%)': s['tre_duoc_can']['ty_le'],
+        'Được đo': s['tre_duoc_do']['tong'],
+        'Được đo (Trai)': s['tre_duoc_do']['trai'],
+        'Được đo (Gái)': s['tre_duoc_do']['gai'],
+        'Tỷ lệ đo (%)': s['tre_duoc_do']['ty_le'],
         'SDD CN/tuổi': s['sdd_cn_tuoi']['tong'],
         'SDD CN/tuổi (Trai)': s['sdd_cn_tuoi']['trai'],
         'SDD CN/tuổi (Gái)': s['sdd_cn_tuoi']['gai'],
@@ -555,13 +538,10 @@ def combine_summaries(summaries: list[dict]) -> Optional[dict]:
         'tong_so_tre': {'tong': 0, 'trai': 0, 'gai': 0},
         'tre_duoc_can': {'tong': 0, 'trai': 0, 'gai': 0},
         'tre_duoc_do': {'tong': 0, 'trai': 0, 'gai': 0},
-        'sdd_cn_tuoi': {'tong': 0, 'trai': 0, 'gai': 0, 'muc_2sd': 0, 'muc_3sd': 0, 'thua_2sd_3sd': 0},
+        'sdd_cn_tuoi': {'tong': 0, 'trai': 0, 'gai': 0, 'muc_2sd': 0, 'muc_3sd': 0},
         'sdd_cc_tuoi': {'tong': 0, 'trai': 0, 'gai': 0, 'muc_2sd': 0, 'muc_3sd': 0},
         'sdd_cn_cc': {'tong': 0, 'trai': 0, 'gai': 0, 'muc_2sd': 0, 'muc_3sd': 0},
-        'thua_can_beo_phi': {
-            'cc_tuoi': {'tong': 0, 'trai': 0, 'gai': 0, 'muc_2sd': 0, 'muc_3sd': 0},
-            'cn_cc': {'tong': 0, 'trai': 0, 'gai': 0, 'muc_2sd': 0, 'muc_3sd': 0}
-        }
+        'thua_can_beo_phi': {'tong': 0, 'trai': 0, 'gai': 0}
     }
 
     for s in summaries:
@@ -569,12 +549,11 @@ def combine_summaries(summaries: list[dict]) -> Optional[dict]:
         add(agg['tre_duoc_can'], s['tre_duoc_can'], ['tong', 'trai', 'gai'])
         add(agg['tre_duoc_do'], s['tre_duoc_do'], ['tong', 'trai', 'gai'])
 
-        add(agg['sdd_cn_tuoi'], s['sdd_cn_tuoi'], ['tong', 'trai', 'gai', 'muc_2sd', 'muc_3sd', 'thua_2sd_3sd'])
+        add(agg['sdd_cn_tuoi'], s['sdd_cn_tuoi'], ['tong', 'trai', 'gai', 'muc_2sd', 'muc_3sd'])
         add(agg['sdd_cc_tuoi'], s['sdd_cc_tuoi'], ['tong', 'trai', 'gai', 'muc_2sd', 'muc_3sd'])
         add(agg['sdd_cn_cc'], s['sdd_cn_cc'], ['tong', 'trai', 'gai', 'muc_2sd', 'muc_3sd'])
 
-        add(agg['thua_can_beo_phi']['cc_tuoi'], s['thua_can_beo_phi']['cc_tuoi'], ['tong', 'trai', 'gai', 'muc_2sd', 'muc_3sd'])
-        add(agg['thua_can_beo_phi']['cn_cc'], s['thua_can_beo_phi']['cn_cc'], ['tong', 'trai', 'gai', 'muc_2sd', 'muc_3sd'])
+        add(agg['thua_can_beo_phi'], s['thua_can_beo_phi'], ['tong', 'trai', 'gai'])
 
     total = agg['tong_so_tre']['tong']
     len_can = agg['tre_duoc_can']['tong']

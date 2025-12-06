@@ -66,7 +66,6 @@ class mainApp(AppUI):
     def format_summary(self, summary: dict, title: str = "TRẺ DƯỚI 2 TUỔI") -> str:
         """Chuyển dict thống kê thành text"""
         s = summary
-        tc = s['thua_can_beo_phi']
         
         lines = [
             f"{'='*60}",
@@ -83,7 +82,6 @@ class mainApp(AppUI):
             f"",
             f"4. SDD CÂN NẶNG/TUỔI: {s['sdd_cn_tuoi']['tong']} (Trai: {s['sdd_cn_tuoi']['trai']}, Gái: {s['sdd_cn_tuoi']['gai']})",
             f"   - Mức -2SD: {s['sdd_cn_tuoi']['muc_2sd']}, Mức -3SD: {s['sdd_cn_tuoi']['muc_3sd']}",
-            f"   - Thừa cân (+2SD, +3SD): {s['sdd_cn_tuoi']['thua_2sd_3sd']}",
             f"   Tỷ lệ SDD: {s['sdd_cn_tuoi']['ty_le']}%",
             f"",
             f"5. SDD CHIỀU CAO/TUỔI: {s['sdd_cc_tuoi']['tong']} (Trai: {s['sdd_cc_tuoi']['trai']}, Gái: {s['sdd_cc_tuoi']['gai']})",
@@ -93,11 +91,7 @@ class mainApp(AppUI):
             f"6. SDD CÂN NẶNG/CHIỀU CAO: {s['sdd_cn_cc']['tong']} (Trai: {s['sdd_cn_cc']['trai']}, Gái: {s['sdd_cn_cc']['gai']})",
             f"   - Mức -2SD: {s['sdd_cn_cc']['muc_2sd']}, Mức -3SD: {s['sdd_cn_cc']['muc_3sd']}",
             f"",
-            f"7. THỪA CÂN, BÉO PHÌ:",
-            f"   CC/Tuổi: {tc['cc_tuoi']['tong']} (Trai: {tc['cc_tuoi']['trai']}, Gái: {tc['cc_tuoi']['gai']})",
-            f"      - Mức +2SD: {tc['cc_tuoi']['muc_2sd']}, Mức +3SD: {tc['cc_tuoi']['muc_3sd']}",
-            f"   CN/CC: {tc['cn_cc']['tong']} (Trai: {tc['cn_cc']['trai']}, Gái: {tc['cn_cc']['gai']})",
-            f"      - Mức +2SD: {tc['cn_cc']['muc_2sd']}, Mức +3SD: {tc['cn_cc']['muc_3sd']}",
+            f"7. THỪA CÂN, BÉO PHÌ (CN/Tuổi +2SD, +3SD): {s['thua_can_beo_phi']['tong']} (Trai: {s['thua_can_beo_phi']['trai']}, Gái: {s['thua_can_beo_phi']['gai']})",
             f"",
             f"{'='*60}",
         ]
@@ -105,7 +99,17 @@ class mainApp(AppUI):
     
     def export_to_excel(self):
         output_file = self.file_path.replace('.xlsx', '_ketqua.xlsx')
-        export_to_excel(self.df_children, input_file=self.file_path, output_file=output_file)
+        under5_table = None
+        if self.var_under5_table.get():
+            summary_5 = self.summary_statistics(max_months=60)
+            under5_table = build_under5_statistics_table(summary_5)
+        export_to_excel(
+            self.df_children,
+            input_file=self.file_path,
+            output_file=output_file,
+            under5_table=under5_table,
+            under5_sheet_name='Thong ke <5T'
+        )
 
         
 

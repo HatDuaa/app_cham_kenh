@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from threading import Thread
 from process_helper import summary_table, combine_summaries
+from excel_file_helper import build_under5_statistics_table
 
 
 class AppUI:
@@ -76,6 +77,7 @@ class AppUI:
         self.var_overwrite = tk.BooleanVar()
         self.var_summary_2 = tk.BooleanVar()
         self.var_summary_5 = tk.BooleanVar()
+        self.var_under5_table = tk.BooleanVar()
         
         # Row 1
         row1 = ttk.Frame(frame_functions)
@@ -101,6 +103,7 @@ class AppUI:
         row4.pack(fill="x", pady=5)
         ttk.Checkbutton(row4, text="Thống kê trẻ dưới 2 tuổi", variable=self.var_summary_2).pack(side="left", padx=20)
         ttk.Checkbutton(row4, text="Thống kê trẻ dưới 5 tuổi", variable=self.var_summary_5).pack(side="left", padx=20)
+        ttk.Checkbutton(row4, text="Xuất bảng tổng hợp <5T", variable=self.var_under5_table).pack(side="left", padx=20)
         
         # === BUTTON THỰC HIỆN ===
         btn_execute = ttk.Button(
@@ -335,14 +338,21 @@ class AppUI:
             return combined
 
         def export_summary_excels(df_under_2, df_under_5):
+            under5_table = None
+            if summaries_5 and self.var_under5_table.get():
+                combined_5 = combine_summaries([s for _, s in summaries_5])
+                if combined_5:
+                    under5_table = build_under5_statistics_table(combined_5)
             if df_under_2 is None and df_under_5 is None:
                 return None
-            out_path = root / "summary_folder.xlsx"
+            out_path = root / "Tổng hợp thống kê.xlsx"
             with pd.ExcelWriter(out_path) as writer:
                 if df_under_2 is not None:
                     df_under_2.to_excel(writer, sheet_name='Dưới 2 tuổi', index=False)
                 if df_under_5 is not None:
                     df_under_5.to_excel(writer, sheet_name='Dưới 5 tuổi', index=False)
+                if under5_table is not None:
+                    under5_table.to_excel(writer, sheet_name='Thong ke <5T', index=False)
             return out_path
 
         df_files_2 = build_file_df(summaries_2) if self.var_summary_2.get() else None
