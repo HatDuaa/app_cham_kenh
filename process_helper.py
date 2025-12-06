@@ -407,12 +407,24 @@ def summary_statistics(df: pd.DataFrame, max_months: Optional[int] = None) -> di
     sdd_cn_cc_3sd = len(df_cn_cc[df_cn_cc['execute_cn_cc'] == '-3 SD'])
     ty_le_sdd_cn_cc = len(sdd_cn_cc) / len(df_cn_cc) * 100 if len(df_cn_cc) > 0 else 0
     
-    # === THỪA CÂN, BÉO PHÌ ===
-    # Chỉ tính béo phì từ CN/Tuổi (+2SD, +3SD)
-    beo_phi_df = df_can[df_can['execute_cn_tuoi'].isin(['+2 SD', '+3 SD'])]
-    beo_phi_tong = len(beo_phi_df)
-    beo_phi_trai = len(beo_phi_df[beo_phi_df['gioi_tinh'] == 'trai'])
-    beo_phi_gai = len(beo_phi_df[beo_phi_df['gioi_tinh'] == 'gai'])
+    # === THỪA CÂN VÀ BÉO PHÌ (CN/Tuổi) ===
+    # Thừa cân: +2SD
+    thua_can_cn_tuoi = df_can[df_can['execute_cn_tuoi'] == '+2 SD']
+    thua_can_cn_tuoi_tong = len(thua_can_cn_tuoi)
+    thua_can_cn_tuoi_trai = len(thua_can_cn_tuoi[thua_can_cn_tuoi['gioi_tinh'] == 'trai'])
+    thua_can_cn_tuoi_gai = len(thua_can_cn_tuoi[thua_can_cn_tuoi['gioi_tinh'] == 'gai'])
+    
+    # Béo phì: +3SD
+    beo_phi_cn_tuoi = df_can[df_can['execute_cn_tuoi'] == '+3 SD']
+    beo_phi_cn_tuoi_tong = len(beo_phi_cn_tuoi)
+    beo_phi_cn_tuoi_trai = len(beo_phi_cn_tuoi[beo_phi_cn_tuoi['gioi_tinh'] == 'trai'])
+    beo_phi_cn_tuoi_gai = len(beo_phi_cn_tuoi[beo_phi_cn_tuoi['gioi_tinh'] == 'gai'])
+    
+    # Tổng thừa cân + béo phì
+    thua_can_beo_phi = df_can[df_can['execute_cn_tuoi'].isin(['+2 SD', '+3 SD'])]
+    thua_can_beo_phi_tong = len(thua_can_beo_phi)
+    thua_can_beo_phi_trai = len(thua_can_beo_phi[thua_can_beo_phi['gioi_tinh'] == 'trai'])
+    thua_can_beo_phi_gai = len(thua_can_beo_phi[thua_can_beo_phi['gioi_tinh'] == 'gai'])
     
     result = {
         'tong_so_tre': {'tong': total, 'trai': total_trai, 'gai': total_gai},
@@ -439,8 +451,14 @@ def summary_statistics(df: pd.DataFrame, max_months: Optional[int] = None) -> di
             'muc_2sd': sdd_cn_cc_2sd, 'muc_3sd': sdd_cn_cc_3sd,
             'ty_le': round(ty_le_sdd_cn_cc, 2)
         },
+        'thua_can_cn_tuoi': {
+            'tong': thua_can_cn_tuoi_tong, 'trai': thua_can_cn_tuoi_trai, 'gai': thua_can_cn_tuoi_gai
+        },
+        'beo_phi_cn_tuoi': {
+            'tong': beo_phi_cn_tuoi_tong, 'trai': beo_phi_cn_tuoi_trai, 'gai': beo_phi_cn_tuoi_gai
+        },
         'thua_can_beo_phi': {
-            'tong': beo_phi_tong, 'trai': beo_phi_trai, 'gai': beo_phi_gai
+            'tong': thua_can_beo_phi_tong, 'trai': thua_can_beo_phi_trai, 'gai': thua_can_beo_phi_gai
         }
     }
     
@@ -481,42 +499,68 @@ def print_summary(summary: dict, title: str = "TRẺ DƯỚI 2 TUỔI"):
 
 
 def summary_table(summary: dict) -> pd.DataFrame:
-    """Chuyển summary dict thành DataFrame dạng bảng phẳng để in/excel."""
+    """Chuyển summary dict thành DataFrame dạng bảng phẳng để in/excel - theo đúng thứ tự bảng mẫu."""
     s = summary
     total = s['tong_so_tre']['tong'] or 1  # tránh chia 0
-    beo_phi_tong = s['thua_can_beo_phi']['tong']
-    beo_phi_trai = s['thua_can_beo_phi']['trai']
-    beo_phi_gai = s['thua_can_beo_phi']['gai']
-    ty_le_beo_phi = round(beo_phi_tong / total * 100, 2)
+    len_can = s['tre_duoc_can']['tong'] or 1
+    len_do = s['tre_duoc_do']['tong'] or 1
+    
+    # Tính tỷ lệ được cân đo (trên tổng số trẻ)
+    ty_le_duoc_can_do = round(len_can / total * 100, 2)
 
     row = {
+        # 1. TỔNG SỐ TRẺ
         'Tổng số trẻ': s['tong_so_tre']['tong'],
-        'Trai': s['tong_so_tre']['trai'],
-        'Gái': s['tong_so_tre']['gai'],
-        'Được cân': s['tre_duoc_can']['tong'],
-        'Được cân (Trai)': s['tre_duoc_can']['trai'],
-        'Được cân (Gái)': s['tre_duoc_can']['gai'],
-        'Tỷ lệ cân (%)': s['tre_duoc_can']['ty_le'],
-        'Được đo': s['tre_duoc_do']['tong'],
-        'Được đo (Trai)': s['tre_duoc_do']['trai'],
-        'Được đo (Gái)': s['tre_duoc_do']['gai'],
-        'Tỷ lệ đo (%)': s['tre_duoc_do']['ty_le'],
-        'SDD CN/tuổi': s['sdd_cn_tuoi']['tong'],
-        'SDD CN/tuổi (Trai)': s['sdd_cn_tuoi']['trai'],
-        'SDD CN/tuổi (Gái)': s['sdd_cn_tuoi']['gai'],
+        'TS Trai': s['tong_so_tre']['trai'],
+        'TS Gái': s['tong_so_tre']['gai'],
+        
+        # 2. SỐ TRẺ ĐƯỢC CÂN, ĐO
+        'Số trẻ được cân, đo': len_can,
+        'Cân đo Trai': s['tre_duoc_can']['trai'],
+        'Cân đo Gái': s['tre_duoc_can']['gai'],
+        'Tỷ lệ được cân, đo (%)': ty_le_duoc_can_do,
+        
+        # 3. CẦN XÁC ĐỊNH TRẺ DƯỚI 5 TUỔI CÓ THỪA CÂN HOẶC BÉO PHÌ
+        'Thừa cân/béo phì': s['thua_can_beo_phi']['tong'],
+        'Thừa cân/béo phì Trai': s['thua_can_beo_phi']['trai'],
+        'Thừa cân/béo phì Gái': s['thua_can_beo_phi']['gai'],
+        'Tỷ lệ thừa cân/béo phì (%)': round(s['thua_can_beo_phi']['tong'] / len_can * 100, 2),
+        
+        # 1. SỐ TRẺ BỊ SDD CN/TUỔI (THỂ NHẸ CÂN)
+        'SDD CN/tuổi (nhẹ cân)': s['sdd_cn_tuoi']['tong'],
+        'SDD CN/tuổi Trai': s['sdd_cn_tuoi']['trai'],
+        'SDD CN/tuổi Gái': s['sdd_cn_tuoi']['gai'],
         'Tỷ lệ SDD CN/tuổi (%)': s['sdd_cn_tuoi']['ty_le'],
-        'SDD CC/tuổi': s['sdd_cc_tuoi']['tong'],
-        'SDD CC/tuổi (Trai)': s['sdd_cc_tuoi']['trai'],
-        'SDD CC/tuổi (Gái)': s['sdd_cc_tuoi']['gai'],
+        
+        # 1.1 Trong đó: SDD nhẹ cân (-2SD)
+        'SDD nhẹ cân (-2SD)': s['sdd_cn_tuoi']['muc_2sd'],
+        
+        # 1.2 Trong đó: SDD nặng cân (-3SD) 
+        'SDD nặng cân (-3SD)': s['sdd_cn_tuoi']['muc_3sd'],
+        
+        # 4. SỐ TRẺ BỊ SDD CC/TUỔI (THỂ THẤP CÒI)
+        'SDD CC/tuổi (thấp còi)': s['sdd_cc_tuoi']['tong'],
+        'SDD CC/tuổi Trai': s['sdd_cc_tuoi']['trai'],
+        'SDD CC/tuổi Gái': s['sdd_cc_tuoi']['gai'],
         'Tỷ lệ SDD CC/tuổi (%)': s['sdd_cc_tuoi']['ty_le'],
-        'SDD CN/CC': s['sdd_cn_cc']['tong'],
-        'SDD CN/CC (Trai)': s['sdd_cn_cc']['trai'],
-        'SDD CN/CC (Gái)': s['sdd_cn_cc']['gai'],
+        
+        # 4.1 Trong đó: SDD thấp còi (-2SD)
+        'SDD thấp còi (-2SD)': s['sdd_cc_tuoi']['muc_2sd'],
+        
+        # 4.2 Trong đó: SDD thấp còi nặng (-3SD)
+        'SDD thấp còi nặng (-3SD)': s['sdd_cc_tuoi']['muc_3sd'],
+        
+        # 5. SỐ TRẺ BỊ SDD CN/CC (THỂ GẦY CÒM)
+        'SDD CN/CC (gầy còm)': s['sdd_cn_cc']['tong'],
+        'SDD CN/CC Trai': s['sdd_cn_cc']['trai'],
+        'SDD CN/CC Gái': s['sdd_cn_cc']['gai'],
         'Tỷ lệ SDD CN/CC (%)': s['sdd_cn_cc']['ty_le'],
-        'Béo phì': beo_phi_tong,
-        'Béo phì (Trai)': beo_phi_trai,
-        'Béo phì (Gái)': beo_phi_gai,
-        'Tỷ lệ béo phì (%)': ty_le_beo_phi,
+        
+        # 5.1 Trong đó: SDD gầy còm (-2SD)
+        'SDD gầy còm (-2SD)': s['sdd_cn_cc']['muc_2sd'],
+        
+        # 5.2 Trong đó: SDD gầy còm nặng (-3SD)
+        'SDD gầy còm nặng (-3SD)': s['sdd_cn_cc']['muc_3sd'],
     }
 
     return pd.DataFrame([row])
@@ -541,6 +585,8 @@ def combine_summaries(summaries: list[dict]) -> Optional[dict]:
         'sdd_cn_tuoi': {'tong': 0, 'trai': 0, 'gai': 0, 'muc_2sd': 0, 'muc_3sd': 0},
         'sdd_cc_tuoi': {'tong': 0, 'trai': 0, 'gai': 0, 'muc_2sd': 0, 'muc_3sd': 0},
         'sdd_cn_cc': {'tong': 0, 'trai': 0, 'gai': 0, 'muc_2sd': 0, 'muc_3sd': 0},
+        'thua_can_cn_tuoi': {'tong': 0, 'trai': 0, 'gai': 0},
+        'beo_phi_cn_tuoi': {'tong': 0, 'trai': 0, 'gai': 0},
         'thua_can_beo_phi': {'tong': 0, 'trai': 0, 'gai': 0}
     }
 
@@ -553,6 +599,8 @@ def combine_summaries(summaries: list[dict]) -> Optional[dict]:
         add(agg['sdd_cc_tuoi'], s['sdd_cc_tuoi'], ['tong', 'trai', 'gai', 'muc_2sd', 'muc_3sd'])
         add(agg['sdd_cn_cc'], s['sdd_cn_cc'], ['tong', 'trai', 'gai', 'muc_2sd', 'muc_3sd'])
 
+        add(agg['thua_can_cn_tuoi'], s['thua_can_cn_tuoi'], ['tong', 'trai', 'gai'])
+        add(agg['beo_phi_cn_tuoi'], s['beo_phi_cn_tuoi'], ['tong', 'trai', 'gai'])
         add(agg['thua_can_beo_phi'], s['thua_can_beo_phi'], ['tong', 'trai', 'gai'])
 
     total = agg['tong_so_tre']['tong']
