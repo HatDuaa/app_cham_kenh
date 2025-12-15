@@ -24,6 +24,21 @@ def apply_month_age(df: pd.DataFrame, target_date, birth_col: str = 'ngay_sinh',
     return df
 
 
+def round_height_to_half(df: pd.DataFrame, height_col: str = 'chieu_cao') -> pd.DataFrame:
+    """
+    La  m tro  n chi eu cao ve  bu o c 0.5 cm de d o ng bo  du  lieu.
+    NaN du o  c giu la i.
+    """
+    if height_col not in df.columns:
+        return df.copy()
+    
+    df_rounded = df.copy()
+    df_rounded[height_col] = df_rounded[height_col].apply(
+        lambda x: np.nan if pd.isna(x) else np.round(x * 2) / 2
+    )
+    return df_rounded
+
+
 def execute_weight_by_age(df_children: pd.DataFrame, df_weight_by_age: pd.DataFrame) -> pd.DataFrame:
     df = pd.merge(df_children, df_weight_by_age, how='left', left_on=['thang_tuoi', 'gioi_tinh'], right_on=['thang_tuoi', 'gioi_tinh'])
     

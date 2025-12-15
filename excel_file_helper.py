@@ -82,7 +82,12 @@ def load_danh_sach_can_do(file_path: str, sheet_name: str = 'Sheet1') -> pd.Data
     ]
     
     # Loại bỏ các dòng không phải data (stt không phải số)
-    df = df[pd.to_numeric(df['stt'], errors='coerce').notna()]
+    stt_raw = df['stt']
+    stt_numeric = pd.to_numeric(stt_raw, errors='coerce')
+    # Giữ lại hàng stt là số hoặc trống/NaN; loại các ô chứa chữ/không chuyển được
+    mask_keep = stt_numeric.notna() | stt_raw.isna()
+    df = df.loc[mask_keep].copy()
+    df['stt'] = stt_numeric.loc[df.index]
     
     # Tạo cột note để lưu giá trị không hợp lệ
     df['note'] = ''

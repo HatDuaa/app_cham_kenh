@@ -45,6 +45,11 @@ class mainApp(AppUI):
         if self.var_overwrite.get():
             write_column_to_excel(self.df_children, 'execute_cn_cc', self.file_path, 'L', start_row=7)
     
+    def round_height_cells(self):
+        self.df_children = round_height_to_half(self.df_children)
+        if self.var_overwrite.get():
+            write_column_to_excel(self.df_children, 'chieu_cao', self.file_path, 'J', start_row=7)
+    
     def adjust_height(self):
         self.df_children = adjust_height_by_age(self.df_children, self.df_height_by_age)
         if self.var_overwrite.get():

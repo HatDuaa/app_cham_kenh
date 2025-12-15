@@ -69,6 +69,7 @@ class AppUI:
         
         # Checkbox variables
         self.var_calc_month = tk.BooleanVar()
+        self.var_round_height = tk.BooleanVar()
         self.var_sdd = tk.BooleanVar()
         self.var_cncc = tk.BooleanVar()
         self.var_adj_height = tk.BooleanVar()
@@ -89,6 +90,7 @@ class AppUI:
         # Row 2 - Adj
         row2 = ttk.Frame(frame_functions)
         row2.pack(fill="x", pady=5)
+        ttk.Checkbutton(row2, text="Làm tròn CC 0.5", variable=self.var_round_height).pack(side="left", padx=20)
         ttk.Checkbutton(row2, text="Adj chiều cao", variable=self.var_adj_height).pack(side="left", padx=20)
         ttk.Checkbutton(row2, text="Adj cân nặng", variable=self.var_adj_weight).pack(side="left", padx=20)
         
@@ -298,13 +300,15 @@ class AppUI:
             folder_groups = {}
             for path_str, summary in summaries:
                 p = Path(path_str).resolve()
-                # cộng dồn cho tất cả ancestor trong root
-                for folder in [p.parent] + list(p.parents):
-                    if folder < root:  # ra ngoài root thì dừng
-                        break
-                    folder_groups.setdefault(str(folder), []).append(summary)
-                    if folder == root:
-                        break
+                # Chỉ cộng vào folder chứa trực tiếp file (p.parent)
+                parent_folder = p.parent
+                if parent_folder >= root:  # Chỉ xử lý trong root
+                    folder_groups.setdefault(str(parent_folder), []).append(summary)
+            
+            # Thêm tổng kết cho root folder (tất cả files)
+            if summaries:
+                folder_groups[str(root)] = [s for _, s in summaries]
+            
             rows = []
             for folder_path, lst in folder_groups.items():
                 combined = combine_summaries(lst)
@@ -383,6 +387,9 @@ class AppUI:
         if self.var_calc_month.get():
             self.execute_month_age()
         
+        if self.var_round_height.get():
+            self.round_height_cells()
+        
         if self.var_sdd.get():
             self.execute_weight_by_age()
             self.execute_height_by_age()
@@ -400,70 +407,86 @@ class AppUI:
             self.export_to_excel()
     
     def _execute_tasks(self):
-        """Thực hiện các tác vụ đã chọn (single file mode)"""
+        """Thuc hien cac tac vu da chon (single file mode)"""
         self._clear_log()
         self._log("=" * 50)
-        self._log("BẮT ĐẦU XỬ LÝ...")
+        self._log("BAT DAU XU LY...")
         self._log("=" * 50)
         
         try:
+            step = 1
             if self.var_calc_month.get():
-                self._log("\n[1] Đang tính tháng tuổi...")
+                self._log(f"\n[{step}] Dang tinh thang tuoi...")
                 self.execute_month_age()
-                self._log("    ✓ Hoàn thành tính tháng tuổi")
+                self._log("    OK Hoan thanh tinh thang tuoi")
+                step += 1
+            
+            if self.var_round_height.get():
+                self._log(f"\n[{step}] Dang lam tron chieu cao ve 0.5...")
+                self.round_height_cells()
+                self._log("    OK Hoan thanh lam tron chieu cao")
+                step += 1
             
             if self.var_sdd.get():
-                self._log("\n[2] Đang chấm SDD (CN/tuổi, CC/tuổi)...")
+                self._log(f"\n[{step}] Dang cham SDD (CN/tuoi, CC/tuoi)...")
                 self.execute_weight_by_age()
                 self.execute_height_by_age()
-                self._log("    ✓ Hoàn thành chấm SDD")
+                self._log("    OK Hoan thanh cham SDD")
+                step += 1
             
             if self.var_cncc.get():
-                self._log("\n[3] Đang chấm CN/CC...")
+                self._log(f"\n[{step}] Dang cham CN/CC...")
                 self.execute_weight_by_height()
-                self._log("    ✓ Hoàn thành chấm CN/CC")
+                self._log("    OK Hoan thanh cham CN/CC")
+                step += 1
             
             if self.var_adj_height.get():
-                self._log("\n[4] Đang adj chiều cao...")
+                self._log(f"\n[{step}] Dang adj chieu cao...")
                 self.adjust_height()
-                self._log("    ✓ Hoàn thành adj chiều cao")
+                self._log("    OK Hoan thanh adj chieu cao")
+                step += 1
             
             if self.var_adj_weight.get():
-                self._log("\n[5] Đang adj cân nặng...")
+                self._log(f"\n[{step}] Dang adj can nang...")
                 self.adjust_weight()
-                self._log("    ✓ Hoàn thành adj cân nặng")
+                self._log("    OK Hoan thanh adj can nang")
+                step += 1
             
             if self.var_export.get():
-                self._log("\n[6] Đang xuất ra file mới...")
+                self._log(f"\n[{step}] Dang xuat ra file moi...")
                 self.export_to_excel()
-                self._log("    ✓ Hoàn thành xuất file")
+                self._log("    OK Hoan thanh xuat file")
+                step += 1
             
             if self.var_summary_2.get():
-                self._log("\n[7] Thống kê trẻ dưới 2 tuổi:")
+                self._log(f"\n[{step}] Thong ke tre duoi 2 tuoi:")
                 summary = self.summary_statistics(max_months=24)
-                text = self.format_summary(summary, "TRẺ DƯỚI 2 TUỔI (≤24 tháng)")
-                self._print_summary(text, file_path=self.file_path)
-                self._log("    ✓ Đã hiển thị thống kê")
+                text_sum = self.format_summary(summary, "TRE DUOI 2 TUOI (<=24 thang)")
+                self._print_summary(text_sum, file_path=self.file_path)
+                self._log("    OK Da hien thi thong ke")
+                step += 1
             
             if self.var_summary_5.get():
-                self._log("\n[8] Thống kê trẻ dưới 5 tuổi:")
+                self._log(f"\n[{step}] Thong ke tre duoi 5 tuoi:")
                 summary = self.summary_statistics(max_months=60)
-                text = self.format_summary(summary, "TRẺ DƯỚI 5 TUỔI (≤60 tháng)")
-                self._print_summary(text, file_path=self.file_path)
-                self._log("    ✓ Đã hiển thị thống kê")
+                text_sum = self.format_summary(summary, "TRE DUOI 5 TUOI (<=60 thang)")
+                self._print_summary(text_sum, file_path=self.file_path)
+                self._log("    OK Da hien thi thong ke")
+                step += 1
             
             self._log("\n" + "=" * 50)
-            self._log("HOÀN THÀNH TẤT CẢ!")
+            self._log("HOAN THANH TAT CA!")
             self._log("=" * 50)
             
-            messagebox.showinfo("Thành công", "Đã hoàn thành xử lý!")
+            messagebox.showinfo("Thanh cong", "Da hoan thanh xu ly!")
             
         except Exception as e:
             import traceback
-            traceback.print_exc()  # In chi tiết lỗi ra terminal
-            self._log(f"\n❌ LỖI: {str(e)}")
-            messagebox.showerror("Lỗi", f"Đã xảy ra lỗi: {str(e)}")
+            traceback.print_exc()  # In chi tiet loi ra terminal
+            self._log(f"\nLOI: {str(e)}")
+            messagebox.showerror("Loi", f"Da xay ra loi: {str(e)}")
 
+    
     def load_target_file(self):
         raise NotImplementedError("Not implemented yet")
     
@@ -477,6 +500,9 @@ class AppUI:
         raise NotImplementedError("Not implemented yet")
     
     def execute_weight_by_height(self):
+        raise NotImplementedError("Not implemented yet")
+    
+    def round_height_cells(self):
         raise NotImplementedError("Not implemented yet")
     
     def adjust_height(self):
