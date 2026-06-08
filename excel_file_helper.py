@@ -2,9 +2,91 @@ import openpyxl
 import pandas as pd
 import os
 import shutil
+import time
 from typing import Optional
 
 
+def convert_xls_to_xlsx(xls_path: str, overwrite: bool = False) -> str:
+    """
+    Convert file .xls (định dạng cũ) sang .xlsx bằng Excel COM (pywin32).
+    Giữ nguyên format/chart/ô gộp. Yêu cầu máy phải cài Microsoft Excel.
+
+    Args:
+        xls_path: đường dẫn file .xls
+        overwrite: nếu file .xlsx đích đã tồn tại thì có ghi đè không.
+                   Nếu False và file đã tồn tại -> trả về luôn đường dẫn đó (không convert lại).
+
+    Returns:
+        Đường dẫn file .xlsx (cùng thư mục, cùng tên).
+
+    Raises:
+        FileNotFoundError: không tìm thấy file .xls.
+        RuntimeError: thiếu pywin32 hoặc không khởi động được Excel.
+    """
+    xls_path = os.path.abspath(xls_path)
+    if not os.path.exists(xls_path):
+        raise FileNotFoundError(f"Không tìm thấy file: {xls_path}")
+
+    xlsx_path = os.path.splitext(xls_path)[0] + '.xlsx'
+    if os.path.exists(xlsx_path) and not overwrite:
+        return xlsx_path
+
+    try:
+        import win32com.client as win32
+        import pythoncom
+    except ImportError:
+        raise RuntimeError(
+            "Chưa cài 'pywin32' nên không convert được .xls. "
+            "Cài bằng: pip install pywin32"
+        )
+
+    # App xử lý folder trong Thread phụ. Dùng COM (Excel) trong thread BẮT BUỘC phải
+    # CoInitialize, nếu không Excel COM chập chờn ("Open method failed" lúc được lúc không).
+    pythoncom.CoInitialize()
+    last_err = None
+    try:
+        # Excel cold-start / đang bận có thể fail lần đầu -> thử lại tối đa 3 lần.
+        for attempt in range(3):
+            excel = None
+            wb = None
+            try:
+                # DispatchEx -> instance Excel riêng, không chiếm Excel người dùng đang mở
+                excel = win32.DispatchEx('Excel.Application')
+                excel.Visible = False
+                excel.DisplayAlerts = False
+                try:
+                    # msoAutomationSecurityForceDisable (3): CHẶN mọi macro khi mở file.
+                    # Quan trọng vì file .xls cũ có thể chứa macro virus (vd X97M/Laroux).
+                    excel.AutomationSecurity = 3
+                except Exception:
+                    pass
+                # Mở ReadOnly + UpdateLinks=0 (tham số POSITIONAL — pywin32 late-binding
+                # không nhận keyword args cho method này) -> tránh xung đột khi file đang mở.
+                # Lưu ra .xlsx (FileFormat=51) sẽ LOẠI BỎ macro -> file kết quả sạch virus.
+                wb = excel.Workbooks.Open(xls_path, 0, True)  # Filename, UpdateLinks=0, ReadOnly=True
+                if os.path.exists(xlsx_path):
+                    os.remove(xlsx_path)
+                wb.SaveAs(xlsx_path, FileFormat=51)  # 51 = xlOpenXMLWorkbook (.xlsx)
+                return xlsx_path
+            except Exception as e:
+                last_err = e
+                time.sleep(1.5)  # chờ Excel sẵn sàng rồi thử lại
+            finally:
+                if wb is not None:
+                    try:
+                        wb.Close(False)
+                    except Exception:
+                        pass
+                if excel is not None:
+                    try:
+                        excel.Quit()
+                    except Exception:
+                        pass
+        raise RuntimeError(
+            f"Không convert được .xls sang .xlsx sau 3 lần thử (cần Microsoft Excel): {last_err}"
+        )
+    finally:
+        pythoncom.CoUninitialize()
 
 
 

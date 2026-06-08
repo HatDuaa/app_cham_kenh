@@ -1,3 +1,24 @@
+import os
+import sys
+
+
+def _setup_utf8_output():
+    """Đảm bảo stdout/stderr in được tiếng Việt, tránh UnicodeEncodeError trên
+    console cp1252 (Windows) và tránh crash khi đóng gói .exe --noconsole (stdout=None)."""
+    for name in ('stdout', 'stderr'):
+        stream = getattr(sys, name, None)
+        if stream is None:
+            # Bản .exe --noconsole không có stdout -> gắn stream rỗng để print() không crash
+            setattr(sys, name, open(os.devnull, 'w', encoding='utf-8'))
+            continue
+        try:
+            stream.reconfigure(encoding='utf-8', errors='replace')
+        except Exception:
+            pass
+
+
+_setup_utf8_output()
+
 from excel_file_helper import *
 from process_helper import *
 from ui_helper import *

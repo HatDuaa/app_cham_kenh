@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from threading import Thread
 from process_helper import summary_table, combine_summaries
-from excel_file_helper import build_under5_statistics_table
+from excel_file_helper import build_under5_statistics_table, convert_xls_to_xlsx
 
 
 class AppUI:
@@ -137,6 +137,16 @@ class AppUI:
         filetypes = [("Excel files", "*.xlsx *.xls"), ("All files", "*.*")]
         file_path = filedialog.askopenfilename(filetypes=filetypes)
         if file_path:
+            # File .xls (định dạng cũ) -> convert sang .xlsx trước khi xử lý
+            if file_path.lower().endswith('.xls'):
+                try:
+                    self._log(f"Phát hiện file .xls, đang convert sang .xlsx...")
+                    file_path = convert_xls_to_xlsx(file_path)
+                    self._log(f"✓ Đã convert: {file_path}")
+                except Exception as e:
+                    self._log(f"❌ Không convert được .xls: {e}")
+                    messagebox.showerror("Lỗi", f"Không convert được file .xls:\n{e}")
+                    return
             self.file_path = file_path
             self.folder_path = ''
             self.is_folder_mode = False
@@ -239,12 +249,28 @@ class AppUI:
         self._log("=" * 50)
         
         root = Path(self.folder_path).resolve()
-        all_xlsx_files = list(root.rglob('*.xlsx'))
+        # Bỏ qua file khóa tạm của Excel (tên bắt đầu bằng ~$) và file kết quả (_ketqua)
+        all_xlsx_files = [f for f in root.rglob('*.xlsx') if not f.name.startswith('~$')]
         xlsx_files = [f for f in all_xlsx_files if not f.stem.endswith('_ketqua')]
-        
+
         skipped_count = len(all_xlsx_files) - len(xlsx_files)
         if skipped_count > 0:
             self._log(f"\n⏭ Bỏ qua {skipped_count} file kết quả (_ketqua)")
+
+        # Convert các file .xls (định dạng cũ) sang .xlsx, bỏ qua nếu đã có .xlsx cùng tên
+        existing_xlsx_paths = {f.with_suffix('') for f in xlsx_files}
+        xls_files = [f for f in root.rglob('*.xls') if not f.name.startswith('~$')]
+        for xls_file in xls_files:
+            if xls_file.with_suffix('') in existing_xlsx_paths:
+                self._log(f"\n⏭ Bỏ qua {xls_file.name} (đã có bản .xlsx)")
+                continue
+            try:
+                self._log(f"\n🔄 Convert {xls_file.name} sang .xlsx...")
+                new_path = convert_xls_to_xlsx(str(xls_file))
+                xlsx_files.append(Path(new_path))
+                self._log(f"    ✓ {Path(new_path).name}")
+            except Exception as e:
+                self._log(f"    ❌ Không convert được {xls_file.name}: {e}")
         
         if not xlsx_files:
             self._log("\n❌ Không tìm thấy file Excel nào trong folder!")

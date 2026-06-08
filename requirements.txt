@@ -1,3 +1,4 @@
 openpyxl==3.1.5
 pandas
 pyinstaller
+pywin32==312  ; sys_platform == "win32"  # convert .xls -> .xlsx qua Excel COM
