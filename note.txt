@@ -1,3 +1,1 @@
 pyinstaller --onefile --noconsole --icon=icon.ico --name=AppChamKenh test.py
-vắng dưới 6 tháng: lập nghĩa 1, lập vinh 1
-vắng trên 6 tháng: 6 trẻ, tuỳ thôn
