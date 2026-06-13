@@ -358,8 +358,85 @@ def adjust_weight_by_height_and_age(
     adj_map = dict(zip(df_merged['stt'], df_merged['can_nang_tmp']))
     
     df_children['can_nang'] = df_children['stt'].map(adj_map).fillna(df_children['can_nang'])
-    
+
     return df_children
+
+
+def fill_missing_height_normal(
+    df_children: pd.DataFrame,
+    df_height_by_age: pd.DataFrame,
+    offset_range: tuple = (0.0, 2.0)
+) -> pd.DataFrame:
+    """
+    Điền chiều cao cho trẻ CHƯA có số đo VÀ CHƯA có trạng thái CC/tuổi.
+    Giá trị điền nằm sát đầu thấp của khoảng bình thường (BT):
+    minus_2sd + random nhỏ, kẹp <= plus_2sd -> luôn rơi vào BT.
+    Chỉ điền số đo, KHÔNG ghi trạng thái (để bước Chấm SDD tự tính nếu cần).
+    """
+    if 'chieu_cao' not in df_children.columns:
+        return df_children
+    df = df_children.copy()
+
+    if 'execute_cc_tuoi' in df.columns:
+        no_status = df['execute_cc_tuoi'].fillna('').astype(str).str.strip() == ''
+    else:
+        no_status = pd.Series(True, index=df.index)
+    mask = (df['chieu_cao'].isna() & no_status).to_numpy()
+    if not mask.any():
+        return df_children
+
+    # Tra chuẩn WHO theo (thang_tuoi, gioi_tinh) — reindex giữ ĐÚNG thứ tự & độ dài của df
+    ref = df_height_by_age.drop_duplicates(['thang_tuoi', 'gioi_tinh']).set_index(['thang_tuoi', 'gioi_tinh'])
+    keys = pd.MultiIndex.from_arrays([df['thang_tuoi'], df['gioi_tinh']])
+    lo = ref['minus_2sd'].reindex(keys).to_numpy(dtype='float64')
+    hi = ref['plus_2sd'].reindex(keys).to_numpy(dtype='float64')
+
+    rnd = np.random.uniform(offset_range[0], offset_range[1], len(df))
+    new_vals = np.round(np.minimum(lo + rnd, hi), 1)  # kẹp <= plus_2sd
+
+    fill = mask & ~np.isnan(lo)  # chỉ điền khi có chuẩn WHO tương ứng
+    arr = df['chieu_cao'].to_numpy(dtype='float64')
+    arr[fill] = new_vals[fill]
+    df['chieu_cao'] = arr
+    return df
+
+
+def fill_missing_weight_normal(
+    df_children: pd.DataFrame,
+    df_weight_by_age: pd.DataFrame,
+    offset_range: tuple = (0.0, 1.0)
+) -> pd.DataFrame:
+    """
+    Điền cân nặng cho trẻ CHƯA có số đo VÀ CHƯA có trạng thái CN/tuổi.
+    Dựa theo chuẩn CN/tuổi (không cần chiều cao). Giá trị điền sát đầu thấp
+    khoảng BT: minus_2sd + random nhỏ, kẹp <= plus_2sd. Chỉ điền số, không ghi trạng thái.
+    """
+    if 'can_nang' not in df_children.columns:
+        return df_children
+    df = df_children.copy()
+
+    if 'execute_cn_tuoi' in df.columns:
+        no_status = df['execute_cn_tuoi'].fillna('').astype(str).str.strip() == ''
+    else:
+        no_status = pd.Series(True, index=df.index)
+    mask = (df['can_nang'].isna() & no_status).to_numpy()
+    if not mask.any():
+        return df_children
+
+    # Tra chuẩn WHO theo (thang_tuoi, gioi_tinh) — reindex giữ ĐÚNG thứ tự & độ dài của df
+    ref = df_weight_by_age.drop_duplicates(['thang_tuoi', 'gioi_tinh']).set_index(['thang_tuoi', 'gioi_tinh'])
+    keys = pd.MultiIndex.from_arrays([df['thang_tuoi'], df['gioi_tinh']])
+    lo = ref['minus_2sd'].reindex(keys).to_numpy(dtype='float64')
+    hi = ref['plus_2sd'].reindex(keys).to_numpy(dtype='float64')
+
+    rnd = np.random.uniform(offset_range[0], offset_range[1], len(df))
+    new_vals = np.round(np.minimum(lo + rnd, hi), 1)
+
+    fill = mask & ~np.isnan(lo)
+    arr = df['can_nang'].to_numpy(dtype='float64')
+    arr[fill] = new_vals[fill]
+    df['can_nang'] = arr
+    return df
 
 
 def summary_statistics(df: pd.DataFrame, max_months: Optional[int] = None) -> dict:

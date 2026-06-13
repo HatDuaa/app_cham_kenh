@@ -74,6 +74,8 @@ class AppUI:
         self.var_cncc = tk.BooleanVar()
         self.var_adj_height = tk.BooleanVar()
         self.var_adj_weight = tk.BooleanVar()
+        self.var_fill_cc_normal = tk.BooleanVar()
+        self.var_fill_cn_normal = tk.BooleanVar()
         self.var_export = tk.BooleanVar()
         self.var_overwrite = tk.BooleanVar()
         self.var_summary_2 = tk.BooleanVar()
@@ -87,13 +89,19 @@ class AppUI:
         ttk.Checkbutton(row1, text="Chấm SDD (CN/tuổi, CC/tuổi)", variable=self.var_sdd).pack(side="left", padx=20)
         ttk.Checkbutton(row1, text="Chấm CN/CC", variable=self.var_cncc).pack(side="left", padx=20)
         
-        # Row 2 - Adj
+        # Row 2 - Điền theo kết quả (giữ nguyên trạng thái)
         row2 = ttk.Frame(frame_functions)
         row2.pack(fill="x", pady=5)
         ttk.Checkbutton(row2, text="Làm tròn CC 0.5", variable=self.var_round_height).pack(side="left", padx=20)
-        ttk.Checkbutton(row2, text="Adj chiều cao", variable=self.var_adj_height).pack(side="left", padx=20)
-        ttk.Checkbutton(row2, text="Adj cân nặng", variable=self.var_adj_weight).pack(side="left", padx=20)
-        
+        ttk.Checkbutton(row2, text="Điền CC theo kết quả", variable=self.var_adj_height).pack(side="left", padx=20)
+        ttk.Checkbutton(row2, text="Điền CN theo kết quả", variable=self.var_adj_weight).pack(side="left", padx=20)
+
+        # Row 2b - Điền khoảng bình thường cho trẻ chưa có số đo & chưa có trạng thái
+        row2b = ttk.Frame(frame_functions)
+        row2b.pack(fill="x", pady=5)
+        ttk.Checkbutton(row2b, text="Điền CC bình thường (chưa có số & TT)", variable=self.var_fill_cc_normal).pack(side="left", padx=20)
+        ttk.Checkbutton(row2b, text="Điền CN bình thường (chưa có số & TT)", variable=self.var_fill_cn_normal).pack(side="left", padx=20)
+
         # Row 3 - Export
         row3 = ttk.Frame(frame_functions)
         row3.pack(fill="x", pady=5)
@@ -415,7 +423,13 @@ class AppUI:
         
         if self.var_round_height.get():
             self.round_height_cells()
-        
+
+        if self.var_fill_cc_normal.get():
+            self.fill_height_normal()
+
+        if self.var_fill_cn_normal.get():
+            self.fill_weight_normal()
+
         if self.var_sdd.get():
             self.execute_weight_by_age()
             self.execute_height_by_age()
@@ -452,7 +466,19 @@ class AppUI:
                 self.round_height_cells()
                 self._log("    OK Hoan thanh lam tron chieu cao")
                 step += 1
-            
+
+            if self.var_fill_cc_normal.get():
+                self._log(f"\n[{step}] Dang dien CC binh thuong cho tre chua co so do & trang thai...")
+                self.fill_height_normal()
+                self._log("    OK Hoan thanh dien CC binh thuong")
+                step += 1
+
+            if self.var_fill_cn_normal.get():
+                self._log(f"\n[{step}] Dang dien CN binh thuong cho tre chua co so do & trang thai...")
+                self.fill_weight_normal()
+                self._log("    OK Hoan thanh dien CN binh thuong")
+                step += 1
+
             if self.var_sdd.get():
                 self._log(f"\n[{step}] Dang cham SDD (CN/tuoi, CC/tuoi)...")
                 self.execute_weight_by_age()
@@ -530,7 +556,13 @@ class AppUI:
     
     def round_height_cells(self):
         raise NotImplementedError("Not implemented yet")
-    
+
+    def fill_height_normal(self):
+        raise NotImplementedError("Not implemented yet")
+
+    def fill_weight_normal(self):
+        raise NotImplementedError("Not implemented yet")
+
     def adjust_height(self):
         raise NotImplementedError("Not implemented yet")
     
