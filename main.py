@@ -80,19 +80,29 @@ class mainApp(AppUI):
         self.df_children = fill_missing_weight_normal(self.df_children, self.df_weight_by_age)
         if self.var_overwrite.get():
             write_column_to_excel(self.df_children, 'can_nang', self.file_path, 'H', start_row=7)
-    
-    def adjust_height(self):
-        self.df_children = adjust_height_by_age(self.df_children, self.df_height_by_age)
+
+    def fill_cn_cc_cells(self):
+        # "Điền CN/CC": điền CC và/hoặc CN để đạt chỉ tiêu CN/CC (giữ số gốc, bỏ qua trẻ vắng)
+        self.df_children = fill_cn_cc(
+            self.df_children,
+            self.df_weight_by_height_0_2,
+            self.df_weight_by_height_2_5,
+            self.df_height_by_age,
+            self.df_weight_by_age,
+        )
         if self.var_overwrite.get():
             write_column_to_excel(self.df_children, 'chieu_cao', self.file_path, 'J', start_row=7)
+            write_column_to_excel(self.df_children, 'can_nang', self.file_path, 'H', start_row=7)
     
+    def adjust_height(self):
+        # "Điền CC theo kết quả": điền chiều cao vào ô TRỐNG có trạng thái CC sẵn (giữ nguyên số gốc)
+        self.df_children = fill_height_by_status(self.df_children, self.df_height_by_age)
+        if self.var_overwrite.get():
+            write_column_to_excel(self.df_children, 'chieu_cao', self.file_path, 'J', start_row=7)
+
     def adjust_weight(self):
-        self.df_children = adjust_weight_by_height_and_age(
-            self.df_children, 
-            self.df_weight_by_height_0_2, 
-            self.df_weight_by_height_2_5,
-            self.df_weight_by_age
-        )
+        # "Điền CN theo kết quả": điền cân nặng vào ô TRỐNG có trạng thái CN/tuổi sẵn (giữ nguyên số gốc)
+        self.df_children = fill_weight_by_status(self.df_children, self.df_weight_by_age)
         if self.var_overwrite.get():
             write_column_to_excel(self.df_children, 'can_nang', self.file_path, 'H', start_row=7)
     

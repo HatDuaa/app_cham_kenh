@@ -76,6 +76,7 @@ class AppUI:
         self.var_adj_weight = tk.BooleanVar()
         self.var_fill_cc_normal = tk.BooleanVar()
         self.var_fill_cn_normal = tk.BooleanVar()
+        self.var_fill_cn_cc = tk.BooleanVar()
         self.var_export = tk.BooleanVar()
         self.var_overwrite = tk.BooleanVar()
         self.var_summary_2 = tk.BooleanVar()
@@ -101,6 +102,11 @@ class AppUI:
         row2b.pack(fill="x", pady=5)
         ttk.Checkbutton(row2b, text="Điền CC bình thường (chưa có số & TT)", variable=self.var_fill_cc_normal).pack(side="left", padx=20)
         ttk.Checkbutton(row2b, text="Điền CN bình thường (chưa có số & TT)", variable=self.var_fill_cn_normal).pack(side="left", padx=20)
+
+        # Row 2c - Điền CN/CC theo chỉ tiêu
+        row2c = ttk.Frame(frame_functions)
+        row2c.pack(fill="x", pady=5)
+        ttk.Checkbutton(row2c, text="Điền CN/CC (theo chỉ tiêu CN/CC, giữ CN & CC)", variable=self.var_fill_cn_cc).pack(side="left", padx=20)
 
         # Row 3 - Export
         row3 = ttk.Frame(frame_functions)
@@ -424,25 +430,31 @@ class AppUI:
         if self.var_round_height.get():
             self.round_height_cells()
 
+        # Điền số vào ô TRỐNG dựa trên trạng thái ghi sẵn - PHẢI chạy TRƯỚC khi chấm
+        # (chấm SDD sẽ ghi đè cột trạng thái -> mất trạng thái ghi sẵn ở dòng thiếu số đo)
+        if self.var_adj_height.get():
+            self.adjust_height()
+
+        if self.var_adj_weight.get():
+            self.adjust_weight()
+
+        # Điền số bình thường cho ô trống KHÔNG có trạng thái
         if self.var_fill_cc_normal.get():
             self.fill_height_normal()
 
         if self.var_fill_cn_normal.get():
             self.fill_weight_normal()
 
+        if self.var_fill_cn_cc.get():
+            self.fill_cn_cc_cells()
+
         if self.var_sdd.get():
             self.execute_weight_by_age()
             self.execute_height_by_age()
-        
+
         if self.var_cncc.get():
             self.execute_weight_by_height()
-        
-        if self.var_adj_height.get():
-            self.adjust_height()
-        
-        if self.var_adj_weight.get():
-            self.adjust_weight()
-        
+
         if self.var_export.get():
             self.export_to_excel()
     
@@ -467,6 +479,19 @@ class AppUI:
                 self._log("    OK Hoan thanh lam tron chieu cao")
                 step += 1
 
+            # Điền theo kết quả (ô trống CÓ trạng thái) - TRƯỚC khi chấm để không mất trạng thái ghi sẵn
+            if self.var_adj_height.get():
+                self._log(f"\n[{step}] Dang dien CC theo ket qua (o trong co trang thai)...")
+                self.adjust_height()
+                self._log("    OK Hoan thanh dien CC theo ket qua")
+                step += 1
+
+            if self.var_adj_weight.get():
+                self._log(f"\n[{step}] Dang dien CN theo ket qua (o trong co trang thai)...")
+                self.adjust_weight()
+                self._log("    OK Hoan thanh dien CN theo ket qua")
+                step += 1
+
             if self.var_fill_cc_normal.get():
                 self._log(f"\n[{step}] Dang dien CC binh thuong cho tre chua co so do & trang thai...")
                 self.fill_height_normal()
@@ -479,31 +504,25 @@ class AppUI:
                 self._log("    OK Hoan thanh dien CN binh thuong")
                 step += 1
 
+            if self.var_fill_cn_cc.get():
+                self._log(f"\n[{step}] Dang dien CN/CC theo chi tieu (giu CN & CC)...")
+                self.fill_cn_cc_cells()
+                self._log("    OK Hoan thanh dien CN/CC")
+                step += 1
+
             if self.var_sdd.get():
                 self._log(f"\n[{step}] Dang cham SDD (CN/tuoi, CC/tuoi)...")
                 self.execute_weight_by_age()
                 self.execute_height_by_age()
                 self._log("    OK Hoan thanh cham SDD")
                 step += 1
-            
+
             if self.var_cncc.get():
                 self._log(f"\n[{step}] Dang cham CN/CC...")
                 self.execute_weight_by_height()
                 self._log("    OK Hoan thanh cham CN/CC")
                 step += 1
-            
-            if self.var_adj_height.get():
-                self._log(f"\n[{step}] Dang adj chieu cao...")
-                self.adjust_height()
-                self._log("    OK Hoan thanh adj chieu cao")
-                step += 1
-            
-            if self.var_adj_weight.get():
-                self._log(f"\n[{step}] Dang adj can nang...")
-                self.adjust_weight()
-                self._log("    OK Hoan thanh adj can nang")
-                step += 1
-            
+
             if self.var_export.get():
                 self._log(f"\n[{step}] Dang xuat ra file moi...")
                 self.export_to_excel()
@@ -561,6 +580,9 @@ class AppUI:
         raise NotImplementedError("Not implemented yet")
 
     def fill_weight_normal(self):
+        raise NotImplementedError("Not implemented yet")
+
+    def fill_cn_cc_cells(self):
         raise NotImplementedError("Not implemented yet")
 
     def adjust_height(self):
