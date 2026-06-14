@@ -394,8 +394,9 @@ def fill_cn_cc(
 
     Quy tắc:
     - Chỉ điền ô CÒN TRỐNG (giữ nguyên số đo đã có).
+    - CHỈ điền khi ô CN/CC CÓ trạng thái hợp lệ; CN/CC trống -> BỎ QUA cả dòng.
     - CC có / CN chưa -> điền CN; CN có / CC chưa -> điền CC; cả 2 chưa -> điền cả 2.
-    - Chỉ tiêu để trống -> coi là BT.
+    - Chỉ tiêu CN/tuổi & CC/tuổi để trống -> coi là BT (ràng buộc mềm).
     - Trẻ 'vắng' (mọi cột) -> bỏ qua.
     """
     needed = ['chieu_cao', 'can_nang', 'thang_tuoi', 'gioi_tinh']
@@ -431,9 +432,12 @@ def fill_cn_cc(
         g = g_arr[i]
         if np.isnan(tt):
             continue
+        # Chỉ điền khi ô CN/CC CÓ trạng thái hợp lệ; CN/CC trống -> BỎ QUA
+        cncc_t = str(cncc_st[i]).strip()
+        if cncc_t not in _SD_LABELS:
+            continue
         cc_t = _valid_or_bt(cc_st[i])
         cn_t = _valid_or_bt(cn_st[i])
-        cncc_t = _valid_or_bt(cncc_st[i])
 
         if has_cc and not has_cn:
             # Điền CN: band CN/CC tại chiều cao hiện có, giao với band CN/tuổi
