@@ -257,6 +257,7 @@ class AppUI:
         from pathlib import Path
         import pandas as pd
         
+        self._errors = []
         self._clear_log()
         self._log("=" * 50)
         self._log(f"BẮT ĐẦU XỬ LÝ FOLDER: {self.folder_path}")
@@ -419,9 +420,20 @@ class AppUI:
         if out_path:
             self._log(f"\nĐã lưu thống kê: {out_path}")
         self._log("=" * 50)
-        
-        messagebox.showinfo("Hoàn thành", f"Đã xử lý {success_count}/{len(xlsx_files)} files")
-    
+
+        errs = getattr(self, '_errors', [])
+        if errs:
+            self._log(f"\n⚠ CÓ {len(errs)} DÒNG LỖI (không điền được CN/CC):")
+            for em in errs:
+                self._log(f"  - {em}")
+            messagebox.showwarning(
+                "Hoàn thành (có lỗi)",
+                f"Đã xử lý {success_count}/{len(xlsx_files)} files.\n"
+                f"Có {len(errs)} dòng KHÔNG điền được CN/CC (thỏa cả 3 chỉ tiêu). Xem chi tiết ở ô log."
+            )
+        else:
+            messagebox.showinfo("Hoàn thành", f"Đã xử lý {success_count}/{len(xlsx_files)} files")
+
     def _process_single_file(self):
         """Xử lý 1 file - được gọi từ cả single mode và folder mode"""
         if self.var_calc_month.get():
@@ -460,6 +472,7 @@ class AppUI:
     
     def _execute_tasks(self):
         """Thuc hien cac tac vu da chon (single file mode)"""
+        self._errors = []
         self._clear_log()
         self._log("=" * 50)
         self._log("BAT DAU XU LY...")
@@ -548,9 +561,19 @@ class AppUI:
             self._log("\n" + "=" * 50)
             self._log("HOAN THANH TAT CA!")
             self._log("=" * 50)
-            
-            messagebox.showinfo("Thanh cong", "Da hoan thanh xu ly!")
-            
+
+            errs = getattr(self, '_errors', [])
+            if errs:
+                self._log(f"\n⚠ CÓ {len(errs)} DÒNG LỖI (không điền được CN/CC):")
+                for em in errs:
+                    self._log(f"  - {em}")
+                messagebox.showwarning(
+                    "Hoàn thành (có lỗi)",
+                    f"Có {len(errs)} dòng KHÔNG điền được CN/CC (thỏa cả 3 chỉ tiêu). Xem chi tiết ở ô log."
+                )
+            else:
+                messagebox.showinfo("Thanh cong", "Da hoan thanh xu ly!")
+
         except Exception as e:
             import traceback
             traceback.print_exc()  # In chi tiet loi ra terminal

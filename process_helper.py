@@ -406,23 +406,25 @@ def fill_cn_cc(
     df_weight_by_height_2_5: pd.DataFrame,
     df_height_by_age: pd.DataFrame,
     df_weight_by_age: pd.DataFrame,
-) -> pd.DataFrame:
+):
     """
-    Điền chiều cao và/hoặc cân nặng để đạt CHỈ TIÊU CN/CC (execute_cn_cc),
-    cố gắng giữ chỉ tiêu CN/tuổi (execute_cn_tuoi) & CC/tuổi (execute_cc_tuoi),
-    nhưng UỐN trong band để điền được CN/CC (ưu tiên CN/CC).
+    Điền chiều cao + cân nặng sao cho thỏa ĐỒNG THỜI cả 3 chỉ tiêu:
+    CC/tuổi (execute_cc_tuoi), CN/tuổi (execute_cn_tuoi) và CN/CC (execute_cn_cc).
 
     Quy tắc:
-    - Chỉ điền ô CÒN TRỐNG (giữ nguyên số đo đã có).
     - CHỈ điền khi: ô CN/CC CÓ trạng thái hợp lệ VÀ CẢ HAI số đo (CN, CC) đều trống.
-      (Nếu CN/CC trống, hoặc đã có sẵn 1 trong 2 số đo -> BỎ QUA, giữ nguyên.)
-    - Điền cả chiều cao lẫn cân nặng để đạt chỉ tiêu CN/CC.
-    - Chỉ tiêu CN/tuổi & CC/tuổi để trống -> coi là BT (ràng buộc mềm).
+      (CN/CC trống, hoặc đã có sẵn 1 số đo -> BỎ QUA.)
+    - Chỉ tiêu CN/tuổi & CC/tuổi để trống -> coi là BT.
+    - Tìm chiều cao H thỏa CC/tuổi, và cân nặng W thỏa CN/tuổi VÀ CN/CC (tại H).
+    - Không tìm được bộ số thỏa cả 3 -> KHÔNG điền, ghi vào danh sách lỗi.
     - Trẻ 'vắng' (mọi cột) -> bỏ qua.
+
+    Trả về: (df đã điền, danh sách chuỗi lỗi).
     """
+    errors = []
     needed = ['chieu_cao', 'can_nang', 'thang_tuoi', 'gioi_tinh']
     if any(c not in df_children.columns for c in needed):
-        return df_children
+        return df_children, errors
 
     df = df_children.copy()
     absent = _absent_mask(df)
@@ -430,6 +432,7 @@ def fill_cn_cc(
     cn = df['can_nang'].to_numpy(dtype='float64')
     tt_arr = df['thang_tuoi'].to_numpy(dtype='float64')
     g_arr = df['gioi_tinh'].to_numpy()
+    stt_arr = df['stt'].to_numpy() if 'stt' in df.columns else np.arange(len(df))
 
     def col_st(name):
         if name in df.columns:
@@ -447,42 +450,65 @@ def fill_cn_cc(
             continue
         has_cc = not np.isnan(cc[i])
         has_cn = not np.isnan(cn[i])
-        # CHỈ điền khi CẢ HAI số đo (cân nặng VÀ chiều cao) đều TRỐNG
+        # CHỈ điền khi CẢ HAI số đo đều TRỐNG
         if has_cc or has_cn:
             continue
         tt = tt_arr[i]
         g = g_arr[i]
         if np.isnan(tt):
             continue
-        # Chỉ điền khi ô CN/CC CÓ trạng thái hợp lệ; CN/CC trống -> BỎ QUA
+        # CHỈ điền khi ô CN/CC CÓ trạng thái hợp lệ
         cncc_t = str(cncc_st[i]).strip()
         if cncc_t not in _SD_LABELS:
             continue
-        cc_t = _valid_or_bt(cc_st[i])
-        cn_t = _valid_or_bt(cn_st[i])
+        cc_t = _valid_or_bt(cc_st[i])   # trống -> BT
+        cn_t = _valid_or_bt(cn_st[i])   # trống -> BT
+        stt = stt_arr[i]
+        try:
+            stt_lbl = int(stt) if not pd.isna(stt) else '?'
+        except Exception:
+            stt_lbl = stt
 
-        # Điền chiều cao theo band CC/tuổi, rồi cân nặng theo band CN/CC ∩ CN/tuổi
         hthr = _age_thresholds(df_height_by_age, tt, g)
-        h = _pick_in_band(*_band_sd(cc_t, *hthr)) if hthr else None
-        if h is None:
-            continue
-        cc[i] = h
-        thr = _cncc_thresholds(h, tt, g, t02, t25)
-        if thr is None:
-            continue
-        band = _band_sd(cncc_t, *thr)
         wthr = _age_thresholds(df_weight_by_age, tt, g)
-        if wthr:
-            inter = _intersect_band(band, _band_sd(cn_t, *wthr))
-            if inter:
-                band = inter
-        v = _pick_in_band(*band)
-        if v is not None:
-            cn[i] = v
+        if hthr is None or wthr is None:
+            errors.append(f"stt {stt_lbl}: thiếu chuẩn WHO (tháng {tt}, {g})")
+            continue
+
+        # Ứng viên chiều cao: mốc chuẩn CN/CC (nhóm tuổi+giới) mà CC/tuổi == cc_t
+        tbl = t02 if tt <= 24 else t25
+        sub = tbl[tbl['gioi_tinh'] == g].sort_values('chieu_cao')
+        cand_h = [float(hc) for hc in sub['chieu_cao'].to_numpy(dtype='float64')
+                  if _classify_sd(hc, *hthr) == cc_t]
+
+        w_age_band = _band_sd(cn_t, *wthr)
+        chosen_h = chosen_w = None
+        for hc in cand_h:
+            cthr = _cncc_thresholds(hc, tt, g, t02, t25)
+            if cthr is None:
+                continue
+            feasible = _intersect_band(_band_sd(cncc_t, *cthr), w_age_band)
+            if not feasible:
+                continue
+            w = _pick_in_band(*feasible)
+            if w is None:
+                continue
+            # Kiểm chứng (tránh lệch do làm tròn): W thỏa cả CN/CC lẫn CN/tuổi
+            if _classify_sd(w, *cthr) == cncc_t and _classify_sd(w, *wthr) == cn_t:
+                chosen_h, chosen_w = round(hc, 1), w
+                break
+
+        if chosen_h is None:
+            errors.append(
+                f"stt {stt_lbl}: không tìm được số thỏa CN/tuổi={cn_t}, CC/tuổi={cc_t}, CN/CC={cncc_t}"
+            )
+            continue
+        cc[i] = chosen_h
+        cn[i] = chosen_w
 
     df['chieu_cao'] = cc
     df['can_nang'] = cn
-    return df
+    return df, errors
 
 
 def summary_statistics(df: pd.DataFrame, max_months: Optional[int] = None) -> dict:

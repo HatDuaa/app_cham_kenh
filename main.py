@@ -82,14 +82,22 @@ class mainApp(AppUI):
             write_column_to_excel(self.df_children, 'can_nang', self.file_path, 'H', start_row=7)
 
     def fill_cn_cc_cells(self):
-        # "Điền CN/CC": điền CC và/hoặc CN để đạt chỉ tiêu CN/CC (giữ số gốc, bỏ qua trẻ vắng)
-        self.df_children = fill_cn_cc(
+        # "Điền CN/CC": điền CC + CN thỏa cả 3 chỉ tiêu (giữ số gốc, bỏ qua trẻ vắng)
+        self.df_children, errs = fill_cn_cc(
             self.df_children,
             self.df_weight_by_height_0_2,
             self.df_weight_by_height_2_5,
             self.df_height_by_age,
             self.df_weight_by_age,
         )
+        if errs:
+            if not hasattr(self, '_errors'):
+                self._errors = []
+            fname = os.path.basename(self.file_path)
+            for msg in errs:
+                full = f"[{fname}] {msg}"
+                self._errors.append(full)
+                self._log(f"    ⚠ {full}")
         if self.var_overwrite.get():
             write_column_to_excel(self.df_children, 'chieu_cao', self.file_path, 'J', start_row=7)
             write_column_to_excel(self.df_children, 'can_nang', self.file_path, 'H', start_row=7)
