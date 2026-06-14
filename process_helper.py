@@ -12,6 +12,14 @@ def _strip_accents(s) -> str:
     return ''.join(c for c in s if unicodedata.category(c) != 'Mn').lower()
 
 
+def _preserve_vang(orig_series, computed):
+    """Giữ lại ô có chữ 'vắng' (mọi biến thể) từ giá trị GỐC, phần còn lại dùng giá trị tính.
+    Tránh việc chấm lại ghi đè '' lên chữ 'Vắng' của trẻ vắng mặt."""
+    orig = orig_series.fillna('').astype(str).to_numpy()
+    vang = np.array([('vang' in _strip_accents(v)) for v in orig])
+    return np.where(vang, orig, np.asarray(computed, dtype=object))
+
+
 def _absent_mask(df: pd.DataFrame) -> np.ndarray:
     """Trẻ VẮNG MẶT: có chữ 'vắng' (mọi biến thể dấu/hoa thường: vang, vắng, Vắng, VẮNG...)
     ở BẤT KỲ cột nào được load lên. Trả mảng bool theo thứ tự dòng của df."""
@@ -70,9 +78,13 @@ def execute_weight_by_age(df_children: pd.DataFrame, df_weight_by_age: pd.DataFr
         df['can_nang'] > df['plus_3sd'],
     ]
     choices = ['-3 SD', '-2 SD', 'BT', '+2 SD', '+3 SD']
-    
-    df['execute_cn_tuoi'] = np.select(conditions, choices, default='')
-    
+
+    computed = np.select(conditions, choices, default='')
+    if 'execute_cn_tuoi' in df.columns:
+        df['execute_cn_tuoi'] = _preserve_vang(df['execute_cn_tuoi'], computed)
+    else:
+        df['execute_cn_tuoi'] = computed
+
     df = df.drop(columns=df_weight_by_age.columns.difference(['thang_tuoi', 'gioi_tinh']))
     
     return df
@@ -89,9 +101,13 @@ def execute_height_by_age(df_children: pd.DataFrame, df_height_by_age: pd.DataFr
         df['chieu_cao'] > df['plus_3sd'],
     ]
     choices = ['-3 SD', '-2 SD', 'BT', '+2 SD', '+3 SD']
-    
-    df['execute_cc_tuoi'] = np.select(conditions, choices, default='')
-    
+
+    computed = np.select(conditions, choices, default='')
+    if 'execute_cc_tuoi' in df.columns:
+        df['execute_cc_tuoi'] = _preserve_vang(df['execute_cc_tuoi'], computed)
+    else:
+        df['execute_cc_tuoi'] = computed
+
     # Bỏ các cột tham chiếu
     df = df.drop(columns=df_height_by_age.columns.difference(['thang_tuoi', 'gioi_tinh']))
     
@@ -142,9 +158,13 @@ def execute_weight_by_height(df_children: pd.DataFrame, df_weight_by_height_0_2:
         df['can_nang'] > df['plus_3sd'],
     ]
     choices = ['-3 SD', '-2 SD', 'BT', '+2 SD', '+3 SD']
-    
-    df['execute_cn_cc'] = np.select(conditions, choices, default='')
-    
+
+    computed = np.select(conditions, choices, default='')
+    if 'execute_cn_cc' in df.columns:
+        df['execute_cn_cc'] = _preserve_vang(df['execute_cn_cc'], computed)
+    else:
+        df['execute_cn_cc'] = computed
+
     # Bỏ các cột tham chiếu
     df = df.drop(columns=df_weight_by_height_0_2.columns.difference(['chieu_cao', 'gioi_tinh']))
     
