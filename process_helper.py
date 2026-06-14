@@ -817,6 +817,10 @@ def write_column_to_excel(
         
         # Xử lý giá trị NaN/None - chỉ ghi value, không thay đổi style
         if pd.isna(value):
+            # KHÔNG ghi đè rỗng lên ô đang chứa chữ 'Vắng' -> giữ nguyên marker vắng mặt
+            old = cell.value
+            if isinstance(old, str) and 'vang' in _strip_accents(old):
+                continue
             cell.value = None
         else:
             cell.value = value

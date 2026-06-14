@@ -253,22 +253,28 @@ def export_to_excel(
         'note': 'M',
     }
     
+    from process_helper import _strip_accents
+
     # Ghi từng dòng data
     for idx, row in df_result.iterrows():
         excel_row = int(data_start_row) + int(idx)
-        
+
         for col_name, excel_col in column_mapping.items():
             if col_name in row.index:
                 value = row[col_name]
+                target = ws[f"{excel_col}{excel_row}"]
                 # Xử lý giá trị NaN
                 if pd.isna(value):
+                    # Giữ 'Vắng' nếu ô template đang chứa -> không ghi đè rỗng
+                    if isinstance(target.value, str) and 'vang' in _strip_accents(target.value):
+                        continue
                     cell_value = None
                 elif col_name in ['stt', 'thang_tuoi'] and pd.notna(value):
                     cell_value = int(value)
                 else:
                     cell_value = value
-                
-                ws[f"{excel_col}{excel_row}"] = cell_value
+
+                target.value = cell_value
     
     # Lưu file
     # Thêm sheet thống kê <5T nếu có
