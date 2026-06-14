@@ -394,8 +394,9 @@ def fill_cn_cc(
 
     Quy tắc:
     - Chỉ điền ô CÒN TRỐNG (giữ nguyên số đo đã có).
-    - CHỈ điền khi ô CN/CC CÓ trạng thái hợp lệ; CN/CC trống -> BỎ QUA cả dòng.
-    - CC có / CN chưa -> điền CN; CN có / CC chưa -> điền CC; cả 2 chưa -> điền cả 2.
+    - CHỈ điền khi: ô CN/CC CÓ trạng thái hợp lệ VÀ CẢ HAI số đo (CN, CC) đều trống.
+      (Nếu CN/CC trống, hoặc đã có sẵn 1 trong 2 số đo -> BỎ QUA, giữ nguyên.)
+    - Điền cả chiều cao lẫn cân nặng để đạt chỉ tiêu CN/CC.
     - Chỉ tiêu CN/tuổi & CC/tuổi để trống -> coi là BT (ràng buộc mềm).
     - Trẻ 'vắng' (mọi cột) -> bỏ qua.
     """
@@ -426,8 +427,9 @@ def fill_cn_cc(
             continue
         has_cc = not np.isnan(cc[i])
         has_cn = not np.isnan(cn[i])
-        if has_cc and has_cn:
-            continue  # cả 2 đã có -> giữ nguyên
+        # CHỈ điền khi CẢ HAI số đo (cân nặng VÀ chiều cao) đều TRỐNG
+        if has_cc or has_cn:
+            continue
         tt = tt_arr[i]
         g = g_arr[i]
         if np.isnan(tt):
@@ -439,71 +441,24 @@ def fill_cn_cc(
         cc_t = _valid_or_bt(cc_st[i])
         cn_t = _valid_or_bt(cn_st[i])
 
-        if has_cc and not has_cn:
-            # Điền CN: band CN/CC tại chiều cao hiện có, giao với band CN/tuổi
-            thr = _cncc_thresholds(cc[i], tt, g, t02, t25)
-            if thr is None:
-                continue
-            band = _band_sd(cncc_t, *thr)
-            wthr = _age_thresholds(df_weight_by_age, tt, g)
-            if wthr:
-                inter = _intersect_band(band, _band_sd(cn_t, *wthr))
-                if inter:
-                    band = inter
-            v = _pick_in_band(*band)
-            if v is not None:
-                cn[i] = v
-
-        elif has_cn and not has_cc:
-            # Điền CC: dò chiều cao sao cho cân hiện có khớp chỉ tiêu CN/CC (ưu tiên CN/CC),
-            # trong các chiều cao đạt CN/CC thì chọn cái gần band CC/tuổi nhất (uốn CC ít nhất)
-            hthr = _age_thresholds(df_height_by_age, tt, g)
-            b_cc = _band_sd(cc_t, *hthr) if hthr else None
-            w = cn[i]
-            tbl = t02 if tt <= 24 else t25
-            sub = tbl[tbl['gioi_tinh'] == g]
-            chosen = None
-            if not sub.empty:
-                hmin = float(sub['chieu_cao'].min())
-                hmax = float(sub['chieu_cao'].max())
-                matches = []
-                for hc in np.arange(round(hmin, 1), round(hmax, 1) + 0.01, 0.5):
-                    cthr = _cncc_thresholds(float(hc), tt, g, t02, t25)
-                    if cthr and _classify_sd(w, *cthr) == cncc_t:
-                        matches.append(round(float(hc), 1))
-                if matches:
-                    if b_cc:
-                        lo_cc, hi_cc = b_cc
-                        chosen = min(
-                            matches,
-                            key=lambda h: 0.0 if lo_cc <= h <= hi_cc else min(abs(h - lo_cc), abs(h - hi_cc))
-                        )
-                    else:
-                        chosen = matches[len(matches) // 2]
-            if chosen is None and b_cc:
-                chosen = _pick_in_band(*b_cc)  # không đâu đạt CN/CC -> giữ đúng CC/tuổi
-            if chosen is not None:
-                cc[i] = chosen
-
-        else:
-            # Cả 2 chưa có: điền chiều cao theo CC/tuổi, rồi cân nặng theo CN/CC ∩ CN/tuổi
-            hthr = _age_thresholds(df_height_by_age, tt, g)
-            h = _pick_in_band(*_band_sd(cc_t, *hthr)) if hthr else None
-            if h is None:
-                continue
-            cc[i] = h
-            thr = _cncc_thresholds(h, tt, g, t02, t25)
-            if thr is None:
-                continue
-            band = _band_sd(cncc_t, *thr)
-            wthr = _age_thresholds(df_weight_by_age, tt, g)
-            if wthr:
-                inter = _intersect_band(band, _band_sd(cn_t, *wthr))
-                if inter:
-                    band = inter
-            v = _pick_in_band(*band)
-            if v is not None:
-                cn[i] = v
+        # Điền chiều cao theo band CC/tuổi, rồi cân nặng theo band CN/CC ∩ CN/tuổi
+        hthr = _age_thresholds(df_height_by_age, tt, g)
+        h = _pick_in_band(*_band_sd(cc_t, *hthr)) if hthr else None
+        if h is None:
+            continue
+        cc[i] = h
+        thr = _cncc_thresholds(h, tt, g, t02, t25)
+        if thr is None:
+            continue
+        band = _band_sd(cncc_t, *thr)
+        wthr = _age_thresholds(df_weight_by_age, tt, g)
+        if wthr:
+            inter = _intersect_band(band, _band_sd(cn_t, *wthr))
+            if inter:
+                band = inter
+        v = _pick_in_band(*band)
+        if v is not None:
+            cn[i] = v
 
     df['chieu_cao'] = cc
     df['can_nang'] = cn
