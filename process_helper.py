@@ -354,16 +354,17 @@ def _band_sd(status, m3, m2, p2, p3):
 
 
 def _pick_in_band(lo, hi):
-    """Chọn 1 giá trị nằm trong band, thiên về đầu thấp; None nếu band vô hạn 2 đầu."""
+    """Chọn 1 giá trị nằm GIỮA band (gần trung vị, tránh sát mép) để số đo trông bình thường;
+    None nếu band vô hạn 2 đầu. Band hở 1 đầu (-3SD/+3SD) -> sát mép hữu hạn."""
     if lo == float('-inf') and hi == float('inf'):
         return None
     if lo == float('-inf'):
-        return round(hi - np.random.uniform(0.3, 1.0), 1)
+        return round(hi - np.random.uniform(0.3, 1.0), 1)   # -3SD: ngay dưới mép trên
     if hi == float('inf'):
-        return round(lo + np.random.uniform(0.3, 1.0), 1)
+        return round(lo + np.random.uniform(0.3, 1.0), 1)   # +3SD: ngay trên mép dưới
     if hi <= lo:
         return round(lo, 1)
-    return round(lo + (hi - lo) * np.random.uniform(0.05, 0.4), 1)
+    return round(lo + (hi - lo) * np.random.uniform(0.35, 0.65), 1)  # giữa band
 
 
 def _intersect_band(b1, b2):
