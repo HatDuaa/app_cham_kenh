@@ -12,12 +12,11 @@ def _strip_accents(s) -> str:
     return ''.join(c for c in s if unicodedata.category(c) != 'Mn').lower()
 
 
-def _preserve_vang(orig_series, computed):
-    """Giữ lại ô có chữ 'vắng' (mọi biến thể) từ giá trị GỐC, phần còn lại dùng giá trị tính.
-    Tránh việc chấm lại ghi đè '' lên chữ 'Vắng' của trẻ vắng mặt."""
-    orig = orig_series.fillna('').astype(str).to_numpy()
-    vang = np.array([('vang' in _strip_accents(v)) for v in orig])
-    return np.where(vang, orig, np.asarray(computed, dtype=object))
+def _apply_score(computed, orig_series, measured_mask):
+    """Chỉ ghi trạng thái tính được cho dòng CÓ số đo; dòng KHÔNG có số đo giữ NGUYÊN
+    giá trị gốc (không ghi đè '' lên trạng thái/chữ 'Vắng' đã có)."""
+    orig = orig_series.to_numpy()
+    return np.where(np.asarray(measured_mask), np.asarray(computed, dtype=object), orig)
 
 
 def _absent_mask(df: pd.DataFrame) -> np.ndarray:
@@ -81,7 +80,7 @@ def execute_weight_by_age(df_children: pd.DataFrame, df_weight_by_age: pd.DataFr
 
     computed = np.select(conditions, choices, default='')
     if 'execute_cn_tuoi' in df.columns:
-        df['execute_cn_tuoi'] = _preserve_vang(df['execute_cn_tuoi'], computed)
+        df['execute_cn_tuoi'] = _apply_score(computed, df['execute_cn_tuoi'], df['can_nang'].notna())
     else:
         df['execute_cn_tuoi'] = computed
 
@@ -104,7 +103,7 @@ def execute_height_by_age(df_children: pd.DataFrame, df_height_by_age: pd.DataFr
 
     computed = np.select(conditions, choices, default='')
     if 'execute_cc_tuoi' in df.columns:
-        df['execute_cc_tuoi'] = _preserve_vang(df['execute_cc_tuoi'], computed)
+        df['execute_cc_tuoi'] = _apply_score(computed, df['execute_cc_tuoi'], df['chieu_cao'].notna())
     else:
         df['execute_cc_tuoi'] = computed
 
@@ -161,7 +160,8 @@ def execute_weight_by_height(df_children: pd.DataFrame, df_weight_by_height_0_2:
 
     computed = np.select(conditions, choices, default='')
     if 'execute_cn_cc' in df.columns:
-        df['execute_cn_cc'] = _preserve_vang(df['execute_cn_cc'], computed)
+        measured = df['can_nang'].notna() & df['chieu_cao'].notna()
+        df['execute_cn_cc'] = _apply_score(computed, df['execute_cn_cc'], measured)
     else:
         df['execute_cn_cc'] = computed
 
